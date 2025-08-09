@@ -1,0 +1,168 @@
+1. Response.hpp/Response.cpp
+
+Setting HTTP status code and message
+
+Building headers (Content-Type, Content-Length, etc.)
+
+Automatically assigning error content if the file is missing
+
+Fully compatible with HTTP/1.1
+
+Can be used with write() or send() for socket response
+
+Error pages fallback handled (HTML strings)
+
+2. Request.hpp/Request.cpp
+
+HTTP/1.1 request parsing
+
+Extracting:
+
+Method (GET, POST, DELETE, etc.)
+
+URI (like /index.html)
+
+HTTP version (like HTTP/1.1)
+
+Headers (like Content-Type, Host)
+
+Body (e.g., POST content)
+
+3. Client.hpp/Client.cpp
+It handles per-client connection data, including:
+
+File descriptor
+
+IP address and port
+
+Received request buffer
+
+Whether a full HTTP request has been received
+
+Associated Request and Response objects
+
+You can extend this later with timeout handling, keep-alive, chunked encoding, etc.
+
+4. Server.hpp / Server.cpp
+Managing multiple listening sockets (multi-port)
+
+Accepting and tracking clients using poll()
+
+Reading HTTP requests from clients
+
+Delegating parsing to Client
+
+Sending responses
+
+Compatible with Request and Response classes you've built
+
+5. Config.hpp/Config.cpp
+This configuration parser will:
+
+Read a basic config.conf file
+
+Store server blocks with:
+
+Listening port
+
+Root directory
+
+Server name
+
+Error page mappings
+
+Allow access to configurations per port
+
+6. Run
+./webserv src/config.conf
+curl -v http://localhost:8080/index.html: 
+VERBOSE: GET with 0-byte payload
+VERBOSE: received 114-byte response of content type text/html
+curl.exe -X POST http://localhost:8080/: <h1>POST OK</h1>
+
+curl.exe -X DELETE http://localhost:8080/index1.html: <h1>File deleted</h1>
+
+curl.exe -i http://localhost:8080/notfound.html: HTTP/1.1 404 Not Found
+Connection: close
+Content-Length: 157
+Content-Type: text/html
+Server: 42Webserv
+
+<!DOCTYPE html>
+<html>
+<head><title>404 Not Found</title></head>
+<body><h1>404 Not Found</h1><p>The requested page could not be found.</p></body>
+</html>
+
+curl.exe -i http://localhost:8080/cause500
+HTTP/1.1 500 Internal Server Error
+Connection: close
+Content-Length: 178
+Content-Type: text/html
+Server: 42Webserv
+
+<!DOCTYPE html>
+<html>
+<head><title>500 Internal Server Error</title></head>
+<body><h1>500 Internal Server Error</h1><p>Something went wrong on the server.</p></body>
+</html>
+
+curl -X POST -F "file=@yourfile.txt" http://localhost:8080/upload
+
+
+7. Updaint of 7.8.2025
+- Modify headers
+- Update config.cpp for not using fstream system
+- 
+
+
+Yes, absolutely! On your localhost, you can use **any available TCP port** (from 1 to 65535) that’s not currently in use by another program or reserved by the system.
+
+---
+
+### A quick overview:
+
+* **Ports 0-1023**: Well-known system ports, usually require root privileges to bind.
+* **Ports 1024-49151**: Registered ports, often used by services but generally free for custom use.
+* **Ports 49152-65535**: Dynamic/private ports, usually safe to use for your own servers.
+
+---
+
+### Examples of common ports besides 8080 and 8081:
+
+* 8000, 8001, 8082, 8888, 3000, 5000, 9000, 9090, 10000, 12345, 65535
+
+---
+
+### How to check free ports on your system?
+
+Run:
+
+```bash
+sudo lsof -iTCP -sTCP:LISTEN -n -P
+```
+
+Or, for a quick check if a port is free, e.g., port 3000:
+
+```bash
+sudo lsof -i :3000
+```
+
+If no output, port is free.
+
+---
+
+### If you want to quickly test your server on another port, you could try:
+
+* 8000
+* 9000
+* 8888
+* 5000
+
+Just change your config to listen on one of those ports and see if it works.
+
+---
+
+Want me to help you update your config file to use a different port and test?
+
+
