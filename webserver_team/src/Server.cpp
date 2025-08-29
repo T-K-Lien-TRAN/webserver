@@ -21,20 +21,70 @@
 #include <fstream>
 #include <cerrno>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
 #define BUFFER_SIZE 4096
 
-// Helper function to print error to stderr using allowed functions
-static void print_error(const char *msg)
+void Server::handleClientWrite(Client *client)
 {
-    const char *err = strerror(errno);
-    write(2, msg, strlen(msg));
-    write(2, ": ", 2);
-    write(2, err, strlen(err));
-    write(2, "\n", 1);
+    Response &res = client->getResponse();
+    size_t CHUNK_SIZE = BUFFER_SIZE;
+    ssize_t byteSend = 0;
+    size_t toSend;
+    if (res._indexByteSend == 0) {
+        //size_t preview_size = 80;
+        //std::cout << "=====response=====" << std::endl;
+        //std::cout << res.output.substr(0, std::min(preview_size, res.output.size())) << std::endl;
+        //std::cout << "=================" << std::endl;
+    }
+    if (res.headerByteSize > res._indexByteSend) {
+        toSend = std::min(CHUNK_SIZE, res.headerByteSize  - res._indexByteSend);
+        byteSend = send(
+            client->client_fd,
+            res.output.c_str() + res._indexByteSend,
+            toSend,
+            0);
+    } else if (!res.sendFile){
+        toSend = std::min(CHUNK_SIZE, res._outputLength - res._indexByteSend);
+        byteSend = send(
+            client->client_fd,
+            res.output.c_str() + res._indexByteSend,
+            toSend,
+            0);
+    } else {
+        if (client->write_fd == -1) {
+            client->write_fd = open(client->outputPath.c_str(), O_RDONLY);
+            res.bodyByteIndex = 0;
+            if (client->write_fd == -1) {
+                perror("open");
+                return;
+            }
+        }
+        size_t offset = client->bodyOffSet + res.bodyByteIndex;
+        ssize_t bytesReader = pread(client->write_fd, client->buffer.data(), client->buffer.size(), offset);
+        if (bytesReader <= 0) {
+            return;
+        }
+        byteSend = send(client->client_fd, client->buffer.data(), bytesReader, 0);
+        if (byteSend > 0) {
+            res.bodyByteIndex += byteSend;
+        }
+    }
+    if (byteSend > 0) { 
+        res._indexByteSend += byteSend; 
+    }
+    if (byteSend <= 0) { return; }
+
+    if (res._indexByteSend >= res._outputLength) {
+        shutdown(client->client_fd, SHUT_WR);
+        switchEvents(client->client_fd, "POLLINN");
+        close(client->write_fd);
+        client->state = COMPLETED;
+        return;
+    } 
 }
 
 Server::Server() {}
@@ -48,42 +98,49 @@ Server::~Server()
     {
         close(it->first);
     } */
-    for (std::map<int, Connect *>::iterator it = _connects.begin(); it != _connects.end(); ++it)
+    /* for (std::map<int, Connect *>::iterator it = _connects.begin(); it != _connects.end(); ++it)
     {
         delete it->second;
-    }
+    } */
 }
 
 bool Server::setup(Config &config)
 {
-    try
+    signal(SIGPIPE, SIG_IGN);
+    std::vector<ServerConfig> &t = config.getServers();
+
+    std::set<int> init_port;
+
+    for (size_t i = 0; i < t.size(); ++i)
+        init_port.insert(t[i].port);
+
+    for (std::set<int>::iterator it = init_port.begin(); it != init_port.end(); ++it)
     {
-        std::vector<ServerConfig> t = config.getServers();
-
-        std::set<int> init_port;
-
-        for (size_t i = 0; i < t.size(); ++i)
-            init_port.insert(t[i].port);
-        for (std::set<int>::iterator it = init_port.begin(); it != init_port.end(); ++it)
+        int server_fd = this->createSocket(*it);
+        if (server_fd > 0)
         {
-            std::vector<ServerConfig> configs;
             for (size_t i = 0; i < t.size(); ++i)
             {
                 if (t[i].port == *it)
-                    configs.push_back(t[i]);
-            };
-            this->createSocket(configs, *it);
+                {
+                    t[i].server_fd = server_fd;
+                    this->_connects.push_back(&t[i]);
+                    for (size_t at = 0; at < t[i].locations.size(); ++at)
+                    {
+                        if (t[i].locations[at].port == *it)
+                        {
+                            t[i].locations[at].port = *it;
+                        }
+                    }
+                }
+            }
         }
-    }
-    catch (const std::exception &e)
-    {
-        std::cerr << e.what() << std::endl;
     }
 
     return true;
 }
 
-void Server::createSocket(std::vector<ServerConfig> &t, int port)
+int Server::createSocket(int port)
 {
     sockaddr_in addr;
 
@@ -92,7 +149,7 @@ void Server::createSocket(std::vector<ServerConfig> &t, int port)
     if (server_fd < 0)
     {
         std::cerr << "Error: Socket on port: " << port << std::endl;
-        return;
+        return 0;
     }
 
     fcntl(server_fd, F_SETFL, O_NONBLOCK);
@@ -107,14 +164,14 @@ void Server::createSocket(std::vector<ServerConfig> &t, int port)
     {
         std::cerr << "Error: Fail to bind port: " << port << std::endl;
         close(server_fd);
-        return;
+        return 0;
     }
 
     if (listen(server_fd, 100) < 0)
     {
         std::cerr << "Error: Fail to listen port: " << port << std::endl;
         close(server_fd);
-        return;
+        return 0;
     }
 
     std::cout << "Listening on port " << port << std::endl;
@@ -124,73 +181,104 @@ void Server::createSocket(std::vector<ServerConfig> &t, int port)
     pfd.events = POLLIN;
     pfd.revents = 0;
 
-    this->_connects[server_fd] = new Connect(server_fd, t);
-
     this->_fds.push_back(pfd);
     this->_sockets.insert(server_fd);
 
-    return;
+    return server_fd;
 }
 
-void Server::run()
+Client *Server::findByClientFd(const int client_fd)
 {
-    while (true)
-    {
-        int ret = poll(&_fds[0], _fds.size(), -1);
-        if (ret <= 0)
-            continue;
-        for (size_t i = 0; i < _fds.size(); i++)
-        {
-            if (_fds[i].revents & POLLIN)
-            {
-                int fd = _fds[i].fd;
-                std::cout << "_fd: " << fd << std::endl;
-                if (this->_sockets.count(fd))
-                {
-                    acceptNewConnection(*this->_connects[fd]);
-                }
-                else
-                {
-                    Connect &connect = *this->findConnectByClientFd(fd);
-                    handleClientData(*connect.clients[fd], connect);
-                }
-            }
-        }
-    }
-}
-
-Connect *Server::findConnectByClientFd(const int client_fd)
-{
-    for (ConnectIt it = this->_connects.begin(); it != this->_connects.end(); ++it)
-    {
-        Connect *connect = it->second;
-        if (connect->clients.count(client_fd))
-            return connect;
-    }
-    return NULL;
+    return this->_clients[client_fd];
 }
 
 bool Server::removeClientByFd(const int client_fd)
 {
-    Connect *connect = this->findConnectByClientFd(client_fd);
-    ClientIt it = connect->clients.find(client_fd);
-    if (it != connect->clients.end())
-    {
-        delete it->second;
-        connect->clients.erase(it);
-        return true;
+    clientList it = this->_clients.find(client_fd);
+    if (it == this->_clients.end()) {
+        return false;
     }
-    return false;
+    Client *client = it->second;
+    ::remove(client->inputPath.c_str() );
+    ::remove(client->outputPath.c_str());
+    this->_clients.erase(it);
+    delete client;
+    return true;
 }
 
-void Server::acceptNewConnection(Connect &t)
+LocationConfig *Server::getServerConfig(Client *client)
+{
+    size_t maxLength = 0;
+    LocationConfig *bestLocation = NULL;
+    for (size_t at = 0; at < this->_connects.size(); ++at)
+    {
+        ServerConfig *config = this->_connects[at];
+        if (config->server_fd == client->server_fd && config->server_name == client->getRequest().getHostname())
+        {
+            for (size_t it = 0; it < config->locations.size(); ++it)
+            {
+
+                std::string locationPath = config->locations[it].path;
+                std::string requestURI = client->getRequest().getURI();
+
+                if (requestURI.size() > 1 && requestURI[requestURI.size() - 1] == '/')
+                    requestURI.erase(requestURI.size() - 1);
+
+                if (locationPath.size() > 1 && locationPath[locationPath.size() - 1] == '/')
+                    locationPath.erase(locationPath.size() - 1);
+
+                if (!requestURI.compare(0, locationPath.size(), locationPath))
+                {
+                    if (requestURI.size() == locationPath.size() || requestURI[locationPath.size()] == '/')
+                    {
+                        if (locationPath.size() > maxLength)
+                        {
+                            bestLocation = &config->locations[it];
+                            maxLength = locationPath.size();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return bestLocation;
+}
+
+void Server::switchEvents(int client_fd, std::string type)
+{
+
+    for (size_t i = 0; i < _fds.size(); ++i)
+    {
+        if (_fds[i].fd == client_fd)
+        {
+            if (type == "POLLOUT") {
+                _fds[i].events |= POLLOUT;
+                _fds[i].events &= ~POLLIN;
+            } else if (type == "POLLIN") {
+                _fds[i].events |= POLLIN;
+                _fds[i].events &= ~POLLOUT;
+            }
+        }
+    }
+    
+}
+
+bool Server::_isAllowedMethod(std::vector<std::string> allowed_methods, std::string method)
+{
+    if (allowed_methods.empty() && method == "GET")
+        return true;
+    if (std::find(allowed_methods.begin(), allowed_methods.end(), method) == allowed_methods.end())
+        return false;
+    return true;
+}
+
+void Server::acceptNewConnection(int server_fd)
 {
     struct sockaddr_in client_addr;
 
     socklen_t client_len = sizeof(client_addr);
-    int client_fd = accept(t.server_fd, (struct sockaddr *)&client_addr, &client_len);
-
-    std::cout << "Accepted client fd: " << client_fd << std::endl;
+    int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
 
     if (client_fd < 0)
         return;
@@ -202,102 +290,137 @@ void Server::acceptNewConnection(Connect &t)
     pfd.events = POLLIN;
     pfd.revents = 0;
 
-    std::cout << "Connected:" << inet_ntoa(client_addr.sin_addr) << std::endl;
+    std::cout << std::endl << "Connected:" << inet_ntoa(client_addr.sin_addr) << std::endl;
 
-    t.clients[client_fd] = new Client(client_fd, t.server_fd);
+    this->_clients[client_fd] = new Client(client_fd, server_fd);
 
     this->_fds.push_back(pfd);
 }
 
-void Server::handleClientData(Client &client, Connect &connect)
+void Server::run() {
+    while (true) {
+        int ret = poll(&_fds[0], _fds.size(), 1000);
+        this->checkChildProcesses();
+        if (ret <= 0) { 
+            continue; 
+        }
+        for (size_t i = 0; i < _fds.size(); ++i) {
+            int fd = _fds[i].fd;
+            Client *client = this->findByClientFd(_fds[i].fd);
+            if (_fds[i].revents & POLLOUT) { 
+                handleClientWrite(client); 
+            }
+            else if (_fds[i].revents & POLLIN) {
+                if (this->_sockets.count(fd)) { 
+                    acceptNewConnection(fd); 
+                } else if (client){ 
+                    handleClientData(client); 
+                }
+            }
+            if (client) {
+                handleResponse(client);
+                disconnect(*client);
+            }
+        }
+    }
+}
+
+void Server::handleClientData(Client *client)
 {
 
-    char buffer[BUFFER_SIZE];
-
-    std::cout << connect << std::endl;
-    std::cout << client << std::endl;
-    std::memset(buffer, 0, sizeof(buffer));
-
-    int bytes = recv(client.client_fd, buffer, BUFFER_SIZE - 1, 0);
-
-    if (bytes <= 0 && client.state == REQUEST)
-        return closeClient(client.client_fd);
-
-    if (client.state == DONE)
-        return closeClient(client.client_fd);
-
-    client.getBuffer().append(buffer, bytes);
-
-    ServerConfig server;
-    if (client.parseRequest())
-    {
-        for (size_t i = 0; i < connect.configs.size(); ++i)
-        {
-            if (connect.configs[i].server_name == client.getRequest().getHost())
-                server = connect.configs[i];
-        }
-        client.state = RESPONSE;
+    if (client->state == HEADER || client->state == BODY) {
+        client->receive();
     }
 
-    if (client.state == RESPONSE)
+    Request &request = client->getRequest();
+
+    if (client->state == HEADER)
     {
-        Request &req = client.getRequest();
-        Response &res = client.getResponse();
-
-        std::string uri = req.getURI();
-        std::string method = req.getMethod();
-
-        // Check if URI ends with .php or .py for CGI handling
-        if (uri.size() > 4)
-        {
-            std::string extension = uri.substr(uri.size() - 4);
-            std::string scriptPath = "www" + uri; // Path to CGI script
-
-            if (extension == ".php")
-            {
-                runCgi(scriptPath, "/usr/bin/php-cgi", client.client_fd);
-                closeClient(client.client_fd);
-                return;
-            }
-            else if (extension == ".py")
-            {
-                runCgi(scriptPath, "/usr/bin/python3", client.client_fd);
-                closeClient(client.client_fd);
-                return;
+        if (client->parseHeader() && !client->location) {
+            client->location = this->getServerConfig(client);
+            if (client->location) {
+                if (!request.hasBody) { client->state = METHOD; }
+                if (request.hasBody) { client->state = BODY; }
+                if (!_isAllowedMethod(client->location->allowed_methods, request.getMethod())) {
+                    response(client, 405);
+                }
+            } else {
+                response(client, 404);
             }
         }
 
-        /*
-                // PHP file
-                if (uri.size() > 4 && uri.substr(uri.size() - 4) == ".php") {
-                    std::string scriptPath = "www" + uri; // Path to PHP file
-                    runPhpCgi(scriptPath.c_str(), client.client_fd);
-                    closeClient(client.client_fd);
-                    return;
-                }
+    }
 
-                // Python file
-                if (uri.size() > 3 && uri.substr(uri.size() - 3) == ".py") {
-                    std::string scriptPath = "www" + uri; // Path to Python file
-                    runPythonCgi(scriptPath.c_str(), client.client_fd);
-                    closeClient(client.client_fd);
-                    return;
-                }
-        */
+    if (client->state == BODY)
+    {
+        switch (client->parseBody())
+        {
+            case 0: { client->state = METHOD; } 
+            break;
+            case 2: { response(client, 413); }
+            break;
+        }
+    }
+}
+
+void Server::handleResponse(Client * client)
+{
+    Request &request = client->getRequest();
+    Response &response = client->getResponse();
+
+    if (client->state == METHOD)
+    {
+        std::string path;
+        std::string uri = request.getURI();
+        std::string method = request.getMethod();
+        std::string temp = client->location->path;
+        if (temp != "/" && temp[0] == '/'){
+            temp = client->location->path.substr(1);
+            path = client->location->root + uri.substr(temp.size());
+        }
+        else { path = uri; }
+        if (uri.size() > 4 && !client->hasCGI) {
+            client->hasCGI = true;
+            std::string extension = uri.substr(uri.size() - 4);
+            std::string scriptPath = "www" + uri;
+            if (extension == ".php")
+                runCgi( client, scriptPath, "/usr/bin/php-cgi");
+            else if (extension == ".py")
+                runCgi(client, scriptPath, "/usr/bin/python3");
+            else if (extension == ".bla" && method == "POST")
+            {
+/*                 struct stat st;
+                if (stat(client->inputPath.c_str(), &st) == 0) {
+                   //std::cout << std::endl << "St_size: " <<  st.st_size << std::endl;
+                } */
+               std::cout << std::endl << "RUNCGI" << std::endl;
+                runCgi(
+                    client,
+                    "/home/bernardoalbuquerque/Documentos/code42/code42_git/webser_lien_config/YoupiBanane/ubuntu_cgi_tester",
+                    ""
+                );
+            }
+        }
+
+        if (client->state == WRITING) { return; }
+
         if (method == "GET")
         {
             if (uri == "/cause500")
-            {
-                res.setDefaultErrorBody(500);
-            }
+                response.setDefaultErrorBody(500);
             else
             {
-                std::string root = server.root;
-                std::string path = "www" + uri;
                 if (uri == "/")
+                    path = client->location->root + client->location->index;
+
+                /*  std::cout << "DEBUGG:333:path: " << path << std::endl; */
+
+                if (_isDirectory(std::string("./") + path))
                 {
-                    path = server.root + "/index.html";
-                    std::cout << path << std::endl;
+                    if (path[path.size() - 1] != '/' && client->location->index[client->location->index.size() - 1] != '/')
+                        path = path + std::string("/") + client->location->index;
+                    else
+                        path = path + client->location->index;
                 }
 
                 std::ifstream file(path.c_str());
@@ -305,23 +428,57 @@ void Server::handleClientData(Client &client, Connect &connect)
                 {
                     std::ostringstream ss;
                     ss << file.rdbuf();
-                    res.setStatus(200);
-                    res.setContentType("text/html");
-                    res.setBody(ss.str());
+                    response.setStatus(200);
+                    response.setContentType("text/html");
+                    response.setBody(ss.str());
                 }
                 else
                 {
-                    res.setDefaultErrorBody(404);
+                    response.setDefaultErrorBody(404);
                 }
             }
         }
-        else if (method == "POST")
-        {
-            std::string body = req.getBody();
-            std::string content_type = req.getHeader("Content-Type");
 
-            if (content_type.find("multipart/form-data") != std::string::npos)
+
+        if (method == "POST")
+        {
+            std::string content_type = request.getHeader("Content-Type");
+            if (client->hasCGI)
             {
+                int fd = open(client->outputPath.c_str(), O_RDONLY);
+                // HANDLE OPEN FILE ERROR;
+                if (fd == -1) { };
+                
+                char buffer[4096];
+                std::string headerBuffer;
+                ssize_t n;
+                bool hasHeader = false;
+
+                while (!hasHeader && (n = read(fd, buffer, sizeof(buffer))) > 0)
+                {
+                    headerBuffer.append(buffer, n);
+                    size_t crfl = headerBuffer.find("\r\n\r\n");
+                    if (crfl != std::string::npos)
+                    {
+                        std::string cgiHeaders = headerBuffer.substr(0, crfl + 4);
+                        client->bodyOffSet = crfl + 4;
+                        hasHeader = true;
+                    }
+                }
+   
+                //size_t preview_size = 200;
+                //std::cout << "=====CGIHEADER=====" << std::endl;
+                //std::cout << headerBuffer.substr(0, std::min(preview_size, headerBuffer.size())) << std::endl;
+                
+                // HANDLE CGI NO HEADER ERROR;
+                if (!hasHeader) {};
+
+                response.setFileContentLength(client->outputPath, client->bodyOffSet);
+
+            }
+            else if (content_type.find("multipart/form-data") != std::string::npos)
+            {
+                std::string body = request.getBody(client->getBuffer());
                 size_t pos = content_type.find("boundary=");
                 if (pos != std::string::npos)
                 {
@@ -378,265 +535,161 @@ void Server::handleClientData(Client &client, Connect &connect)
                         start = body.find(boundary, start + boundary.length());
                     }
 
-                    res.setStatus(201);
-                    res.setBody("<h1>Upload Result</h1>\n" + response_body);
+                    response.setStatus(201);
+                    response.setBody("<h1>Upload Result</h1>\n" + response_body);
                 }
                 else
                 {
-                    res.setStatus(400);
-                    res.setBody("<h1>Bad Request: No boundary found</h1>");
+                    response.setStatus(400);
+                    response.setBody("<h1>Bad Request: No boundary found</h1>");
                 }
             }
             else
             {
-                res.setStatus(400);
-                res.setBody("<h1>Bad Request: Expected multipart/form-data</h1>");
+                std::ifstream in(client->inputPath.c_str(), std::ios::binary | std::ios::ate);
+                if (in.is_open()) {
+                    response.setBody("<h1>File uploaded successfully</h1>");
+                } else {
+                    response.setStatus(500);
+                    response.setBody("<h1>Failed to save file</h1>");
+                }
             }
 
-            res.setContentType("text/html");
+            response.setContentType("text/html");
         }
-        else if (method == "DELETE")
+
+        if (method == "DELETE")
         {
             std::string path = "www" + uri;
             if (remove(path.c_str()) == 0)
             {
-                res.setStatus(200);
-                res.setBody("<h1>File deleted</h1>");
+                response.setStatus(200);
+                response.setBody("<h1>File deleted</h1>");
             }
             else
             {
-                res.setDefaultErrorBody(404);
+                response.setDefaultErrorBody(404);
             }
-            res.setContentType("text/html");
-        }
-        else
-        {
-            res.setDefaultErrorBody(405); // Method Not Allowed
+            response.setContentType("text/html");
         }
 
-        std::string output = res.build();
-        send(client.client_fd, output.c_str(), output.size(), 0);
-        client.state = DONE;
+        response.build();
+        client->state = RESPONSE;
+        this->switchEvents(client->client_fd, "POLLOUT");
+        this->handleClientWrite(client);
     }
 }
 
-void Server::closeClient(int client_fd)
+void Server::closeConnection(int fd)
 {
-    std::cout << "Closing client fd: " << client_fd << std::endl;
+    close(fd);
 
-    close(client_fd);
-
+    //std::cout << std::endl << "RemoveClient: " << fd << std::endl;
     for (size_t i = 0; i < _fds.size(); ++i)
     {
-        if (_fds[i].fd == client_fd)
+        if (_fds[i].fd == fd)
         {
             _fds.erase(_fds.begin() + i);
             break;
         }
     }
 
-    this->removeClientByFd(client_fd);
+    this->removeClientByFd(fd);
+    return;
 }
 
-void Server::runCgi(const std::string &scriptPath, const std::string &interpreter, int client_fd)
+void Server::runCgi(Client *client, const std::string &scriptPath, const std::string &interpreter)
 {
-    int pipefd[2];
-    if (pipe(pipefd) == -1)
-    {
-        print_error("pipe");
-        return;
-    }
-
     pid_t pid = fork();
     if (pid < 0)
     {
-        print_error("fork");
-        return;
+        perror("pid");
+        return ;
     }
 
     if (pid == 0)
     {
-        // Child process
-        close(pipefd[0]); // Close read end
-
-        // Redirect stdout to pipe write end
-        if (dup2(pipefd[1], STDOUT_FILENO) == -1)
+        int in = open(client->inputPath.c_str(), O_RDONLY);
+        int out = open(client->outputPath.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        if (in < 0 || out < 0) { perror("open tmp_file"); exit(1); }
+        dup2(in, STDIN_FILENO);
+        dup2(out, STDOUT_FILENO);
+        close(in);
+        close(out);
+        if (interpreter.empty())
         {
-            print_error("dup2");
-            exit(1);
-        }
-        close(pipefd[1]);
-
-        // Redirect stderr to stdout to capture errors
-        if (dup2(STDOUT_FILENO, STDERR_FILENO) == -1)
-        {
-            print_error("dup2 stderr");
-            exit(1);
-        }
-
-        // Execute interpreter with script path as argument
-        execlp(interpreter.c_str(), interpreter.c_str(), scriptPath.c_str(), NULL);
-
-        // If execlp fails
-        print_error("execlp");
-        exit(1);
-    }
-    else
-    {
-        // Parent process
-        close(pipefd[1]); // Close write end
-
-        char buffer[BUFFER_SIZE];
-        ssize_t count;
-        std::string output;
-
-        // Read all output from the child process
-        while ((count = read(pipefd[0], buffer, BUFFER_SIZE)) > 0)
-        {
-            output.append(buffer, count);
-        }
-        close(pipefd[0]);
-
-        // Wait for child process to finish
-        int status;
-        waitpid(pid, &status, 0);
-
-        // Build HTTP response manually (assuming CGI returns full HTTP headers)
-        if (!output.empty())
-        {
-            send(client_fd, output.c_str(), output.size(), 0);
+            client->getRequest().setCGIEnvironment();
+            setenv("PATH_INFO", scriptPath.c_str(), 1);
+            execlp(scriptPath.c_str(), scriptPath.c_str(), NULL);
         }
         else
-        {
-            // If no output, send 500 Internal Server Error
-            std::string error_body =
-                "HTTP/1.1 500 Internal Server Error\r\n"
-                "Content-Type: text/html\r\n\r\n"
-                "<h1>500 Internal Server Error</h1>\n";
-            send(client_fd, error_body.c_str(), error_body.size(), 0);
-        }
+            execlp(interpreter.c_str(), interpreter.c_str(), scriptPath.c_str(), NULL);
+        perror("execlp");
+        exit(1);
     }
+
+    _childProcesses[pid] = client->client_fd;
+    client->state = WRITING;
+    
 }
 
-/*
-void Server::runPhpCgi(const char* scriptPath, int client_fd) {
-    int pipefd[2];
-    if (pipe(pipefd) == -1) {
-        print_error("pipe");
-        return;
-    }
+bool Server::_isDirectory(const std::string &path)
+{
+    struct stat info;
+    if (stat(path.c_str(), &info) != 0)
+        return false;
+    return S_ISDIR(info.st_mode);
+}
 
-    pid_t pid = fork();
-    if (pid < 0) {
-        print_error("fork");
-        return;
-    }
+bool Server::_isFile(const std::string &path)
+{
+    struct stat info;
+    if (stat(path.c_str(), &info) != 0)
+        return false;
+    return S_ISREG(info.st_mode);
+}
 
-    if (pid == 0) { // Child process
-        if (close(pipefd[0]) == -1) {
-            print_error("close pipefd[0] in child");
-            _exit(1);
-        }
-
-        if (dup2(pipefd[1], 1) == -1) {
-            print_error("dup2");
-            _exit(1);
-        }
-
-        if (close(pipefd[1]) == -1) {
-            print_error("close pipefd[1] in child");
-            _exit(1);
-        }
-
-        const char* argv[3];
-        argv[0] = "php-cgi";
-        argv[1] = scriptPath;
-        argv[2] = NULL;
-
-        extern char **environ;
-        execve("/usr/bin/php-cgi", (char* const*)argv, environ);
-
-        // execve only returns on error
-        print_error("execve");
-        _exit(1);
-    } else { // Parent process
-        if (close(pipefd[1]) == -1) {
-            print_error("close pipefd[1] in parent");
-            return;
-        }
-
-        char buffer[4096];
-        ssize_t bytesRead;
-        while ((bytesRead = read(pipefd[0], buffer, sizeof(buffer))) > 0) {
-            ssize_t bytesSent = 0;
-            while (bytesSent < bytesRead) {
-                ssize_t ret = send(client_fd, buffer + bytesSent, bytesRead - bytesSent, 0);
-                if (ret == -1) {
-                    print_error("send");
-                    close(pipefd[0]);
-                    return;
+void Server::checkChildProcesses()
+{
+    for (ChildIt it = _childProcesses.begin(); it != _childProcesses.end();) {
+        int status;
+        pid_t result = waitpid(it->first, &status, WNOHANG);
+        if (result > 0) {
+            struct stat st;
+            if (stat(this->_clients[it->second]->outputPath.c_str(), &st) == 0) {
+                    //std::cout << std::endl << "OutputSize: " <<  st.st_size << std::endl;
                 }
-                bytesSent += ret;
-            }
+            this->_clients[it->second]->getResponse().sendFile = true;
+            this->_clients[it->second]->state = METHOD;
+            handleResponse(this->_clients[it->second]);
+            _childProcesses.erase(it++);
+            return;
+        } else if (result == -1) {
+            perror("waitpid");
+            _childProcesses.erase(it++);
+        } else {
+            ++it;
         }
-        if (bytesRead == -1) {
-            print_error("read");
-        }
+    } 
+}
 
-        if (close(pipefd[0]) == -1) {
-            print_error("close pipefd[0] in parent");
+void Server::disconnect(Client &client)
+{
+    if (client.state == COMPLETED) {
+        char buffer[1];
+        int result = recv(client.client_fd, buffer, 1, 0);
+        if (result <= 0) {
+            closeConnection(client.client_fd);
         }
-
-        int status;
-        waitpid(pid, &status, 0);
     }
 }
 
-void Server::runPythonCgi(const char* scriptPath, int client_fd) {
-    int pipefd[2];
-    if (pipe(pipefd) == -1) {
-        print_error("pipe");
-        return;
-    }
-
-    pid_t pid = fork();
-    if (pid < 0) {
-        print_error("fork");
-        return;
-    }
-
-    if (pid == 0) { // Child
-        close(pipefd[0]); // Close read end
-
-        // Redirect stdout to pipe write end
-        dup2(pipefd[1], STDOUT_FILENO);
-        close(pipefd[1]);
-
-        // Execute Python interpreter on scriptPath
-        execl("/usr/bin/python3", "python3", scriptPath, NULL);
-
-        // If exec fails
-        print_error("execl");
-        _exit(1);
-    } else { // Parent
-        close(pipefd[1]); // Close write end
-
-        char buffer[BUFFER_SIZE];
-        ssize_t count;
-        std::string output;
-
-        // Read output from pipe
-        while ((count = read(pipefd[0], buffer, sizeof(buffer))) > 0) {
-            output.append(buffer, count);
-        }
-        close(pipefd[0]);
-
-        // Wait for child to finish
-        int status;
-        waitpid(pid, &status, 0);
-
-        // Send output to client
-        send(client_fd, output.c_str(), output.size(), 0);
-    }
+void Server::response(Client *t, int code)
+{
+    Response &res = t->getResponse();
+    res.setDefaultErrorBody(code);
+    res.build();
+    t->state = RESPONSE;
+    switchEvents(t->client_fd, "POLLOUT");
+    handleClientWrite(t);
 }
-*/

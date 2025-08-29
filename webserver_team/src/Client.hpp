@@ -14,43 +14,75 @@
 #define CLIENT_HPP
 
 #include <string>
+#include <vector>
 #include "Request.hpp"
 #include "Response.hpp"
 
-enum ClientState {
-    REQUEST, 
+enum ClientState
+{
+    HEADER,
+    BODY,
+    WRITING,
+    METHOD,
     RESPONSE,
-    DONE
+    COMPLETED
 };
 
-class Client {
+struct CgiResult {
+    int statusCode;
+    std::map<std::string, std::string> headers;
+    std::string body;
+    std::string contentType;
+};
+
+class Client
+{
 public:
+    std::vector<char> buffer;
     const int client_fd;
     const int server_fd;
+    int write_fd;
+    int fileFd;
+    std::string writePath;
+
+    LocationConfig* location; 
     ClientState state;
+
+    std::vector<char> output;
+
+    bool hasCGI;
+    bool writingFile;
+    size_t bodyOffSet;
+    int childPid;
+    std::string outputPath;
+    std::string inputPath;
+ 
     Client(void);
-    Client(const Client& other);
     Client(int client_fd, int server_fd);
     ~Client();
 
     int getFd() const;
-    std::string &getBuffer();
+    std::vector<char> &getBuffer();
     Request &getRequest();
     Response &getResponse();
 
-    bool parseRequest();      // returns true if request is complete
-    bool isRequestReady() const;
-    void reset();             // reset for next request
+   
+    bool parseHeader();
+    int parseBody();
+
+    void reset();
+    void receive();
+    int getId( void ) const;
 
 private:
-    std::string _buffer;
     bool _requestReady;
     Request _request;
     Response _response;
+    std::ofstream _out;
+    static int _counter;
+    int _id;
 };
 
 std::ostream &operator<<(std::ostream &os, const Client &client);
 
-
 #endif
-

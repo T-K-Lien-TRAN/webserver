@@ -28,7 +28,14 @@ int main(int argc, char* argv[]) {
 
     Server server;
 
-    server.setup(config);
+    try
+    {
+        server.setup(config);
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << e.what() << std::endl;
+    }
 
     server.run();
 

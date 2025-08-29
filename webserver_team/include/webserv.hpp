@@ -18,6 +18,7 @@
 enum ConnectionState {
 	REQUEST,
 	RESPONSE,
+    BODY,
 	DONE,
 };
 

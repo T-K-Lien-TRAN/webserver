@@ -6,19 +6,20 @@
 #include "Config.hpp"
 #include "Client.hpp"
 
-typedef std::map<int, Client*>::iterator ClientIt;
+typedef std::map<int, Client *>::iterator ClientIt;
 
 class Connect
 {
 public:
     const int server_fd;
     std::vector<ServerConfig> configs;
-    std::map<int, Client*> clients;
+    std::map<int, Client *> clients;
     Connect();
     ~Connect(void);
     Connect(int, std::vector<ServerConfig>);
 
-private:
+    LocationConfig getLocationConfig(ServerConfig& server, std::string uri);
+    bool isAllowedMethod(std::vector<std::string>, std::string method);
 };
 
 std::ostream &operator<<(std::ostream &os, const Connect &conn);

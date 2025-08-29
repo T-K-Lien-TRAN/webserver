@@ -12,10 +12,12 @@
 
 #include "Response.hpp"
 #include <sstream>
-#include <fcntl.h>    // for open
-#include <unistd.h>   // for read, close
+#include <fcntl.h>  
+#include <unistd.h>   
+#include <iostream>
+#include <sys/stat.h>
 
-Response::Response() : _statusCode(200), _statusMessage("OK") {
+Response::Response() : sendFile(false), _outputLength(0), _indexByteSend(0), _statusCode(200), _statusMessage("OK") {
     _headers["Server"] = "42Webserv";
     _headers["Connection"] = "close";
 }
@@ -40,6 +42,18 @@ void Response::setBody(const std::string &body) {
     std::ostringstream oss;
     oss << _body.size();
     _headers["Content-Length"] = oss.str();
+}
+
+void Response::setFileContentLength(std::string path, size_t bodyOffSet)
+{
+    struct stat st;
+    if (stat(path.c_str(), &st) == 0)
+    {
+        std::ostringstream oss;
+        oss << st.st_size - bodyOffSet;
+        _headers["Content-Length"] = oss.str();
+        _outputLength += st.st_size - bodyOffSet;
+    }
 }
 
 void Response::setDefaultErrorBody(int code) {
@@ -69,7 +83,7 @@ void Response::setDefaultErrorBody(int code) {
     setStatus(code);
 }
 
-std::string Response::build() const {
+void Response::build() {
     std::ostringstream response;
 
     response << "HTTP/1.1 " << _statusCode << " " << _statusMessage << "\r\n";
@@ -80,9 +94,15 @@ std::string Response::build() const {
     }
 
     response << "\r\n";
+
+    headerByteSize = response.str().size();
+    //std::cout << "HeaderByteSize: " <<  headerByteSize << std::endl;
+
     response << _body;
 
-    return response.str();
+    output = response.str();
+    _outputLength += output.size();
+    //std::cout << "OutputLength: " <<  _outputLength << std::endl;
 }
 
 std::string Response::getStatusMessage(int code) const {
