@@ -1,0 +1,35 @@
+Sure! Based on your configuration, we can summarize practical tests in a table format. I’ll include the request path/method, browser action, and expected server behavior.
+
+#	Request	                Method	Browser Action / Test	Expected Behavior
+1	/	                    GET	    Open root URL	        Server returns index.html from www/
+2	/upload 	            GET	    Navigate to upload page	Since autoindex=on, directory listing of www/uploads/ is returned
+3	/upload	                POST	Submit file upload form	File is stored in www/uploads/, server responds 200/created
+4	/uploads	            GET	    Access uploaded files	Server serves static files from www/uploads/, autoindex enabled
+5	/uploads/file.txt	    GET	    Access specific file	Server serves file content
+6	/redirect-me	        GET	    Navigate to redirect	Server returns HTTP 301 redirect to http://lavenderwebfr.com/
+7	/cgi-bin/hello.php	    GET	    Open PHP script	        Server executes PHP via /usr/bin/php-cgi, returns output
+8	/cgi-bin/hello.php	    POST	POST request	        If method allowed, execute PHP CGI; otherwise 405 Method Not Allowed
+9	/scripts/test.py	    GET	    Open Python script	    Server executes Python CGI via /usr/bin/python3, returns output
+10	/scripts/test.py	    POST	POST data to script	    Server executes Python CGI with POST data
+11	/cgi-bin/missing.php	GET	    Non-existent PHP	    Server returns 404 Not Found
+12	/scripts/missing.py	    GET	    Non-existent Python	    Server returns 404 Not Found
+13	/upload/missing	        GET	    Non-existent file	    Server returns 404 Not Found
+14	/	                    POST	Try POST on root	    Method not allowed → 405
+15	/redirect-me/anything	GET	    Sub-path	            Redirect applied only to /redirect-me itself unless wildcard allowed → typically 404 or handled by location matching
+16	/uploads/	            GET	    Access folder	        Autoindex enabled → show folder contents
+17	/cgi-bin/	            GET	    Acess folder no file	If index set (hello.php), execute hello.php
+18	/scripts/	            GET	    Access folder	        No index, autoindex off → 403 Forbidden or 404
+
+Notes / clarifications:
+
+autoindex on allows viewing directory contents when no index file exists.
+
+index specifies the default file to serve when requesting a directory path.
+
+redirect always returns HTTP 3xx before attempting any file access.
+
+CGI execution (cgi_extension + cgi_pass) applies only to matching file extensions.
+
+allow_methods restricts HTTP methods; disallowed methods return 405.
+
+max_body_size limits POST/PUT payloads (uploads).
