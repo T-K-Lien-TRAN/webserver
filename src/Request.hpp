@@ -74,6 +74,7 @@ public:
     std::string getHostname() const;
     bool isComplete() const;
     void setCGIEnvironment(Client *client) const;
+	std::string trim(const std::string &s) const;
 
 private:
     std::string _hostname;
@@ -93,7 +94,6 @@ private:
     std::ofstream _out;
     Multipart _multipart;
 
-    std::string trim(const std::string &s) const;
     void parseRequestLine(const std::string &line);
     void parseHeaders(const std::string &headerSection);
     int multiform(Client &client, size_t bodyLength, size_t maxBodySize);

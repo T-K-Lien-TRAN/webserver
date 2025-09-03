@@ -95,9 +95,7 @@ void Request::parseHeaders(const std::string &headerSection)
 {
     std::istringstream stream(headerSection);
     std::string line;
-    //std::cout << std::endl << "=====request=====" << std::endl;
     while (std::getline(stream, line)) {
-        //std::cout << line << std::endl;
         std::string::size_type pos = line.find(":");
         if (pos == std::string::npos)
             continue;
@@ -106,7 +104,6 @@ void Request::parseHeaders(const std::string &headerSection)
         std::string value = trim(line.substr(pos + 1));
         _headers[key] = value;
     }
-    //std::cout << "=================" << std::endl;
 }
 
 int Request::multiform(Client &client, size_t bodyLength, size_t maxBodySize)

@@ -410,6 +410,44 @@ void Server::fileToOutput(Client *client, int code, std::string path) {
 	}
 }
 
+std::string Server::trim(const std::string &s) const
+{
+    size_t start = s.find_first_not_of(" \t\r\n");
+    size_t end = s.find_last_not_of(" \t\r\n");
+    if (start == std::string::npos || end == std::string::npos)
+        return "";
+    return s.substr(start, end - start + 1);
+}
+
+void Server::extractCGIHeaders(const std::string &cgiHeader, std::string &contentType, std::string &status ) {
+	std::istringstream headerStream(cgiHeader);
+	std::string line;
+
+	while (std::getline(headerStream, line)) {
+		if (line.empty() == false && line[line.size()-1] == '\r') {
+			line.erase(line.size()-1);
+		}
+		if (line.empty()) {
+			continue;
+		}
+		std::string toLowerCase = line;
+		std::transform(toLowerCase.begin(), toLowerCase.end(), toLowerCase.begin(), ::tolower);
+		if (toLowerCase.find("content-type: ") == 0) {
+			size_t delimiter = line.find(':');
+			if (delimiter != std::string::npos) {
+				contentType = line.substr(delimiter+1);
+				contentType = trim(contentType);
+			}
+		} else if (toLowerCase.find("status: ") == 0) {
+			size_t delimiter = line.find(':');
+			if (delimiter != std::string::npos) {
+				status = line.substr(delimiter+1);
+				status = trim(status);
+			}
+		}
+	}
+}
+
 void Server::handleRequest(Client * client)
 {
     Request &request = client->getRequest();
@@ -445,25 +483,33 @@ void Server::handleRequest(Client * client)
             std::string headerBuffer;
             ssize_t n;
             bool hasHeader = false;
+			std::string contentType;
+			std::string status;
 
             while (!hasHeader && (n = read(fd, buffer, sizeof(buffer))) > 0)
             {
                 headerBuffer.append(buffer, n);
-                size_t crfl = headerBuffer.find("\r\n\r\n");
-                if (crfl != std::string::npos)
-                {
-                    std::string cgiHeaders = headerBuffer.substr(0, crfl + 4);
-                    client->bodyOffSet = crfl + 4;
+                size_t headerEnd = headerBuffer.find("\n\n");
+                if (headerEnd != std::string::npos) {
+                    std::string cgiHeaders = headerBuffer.substr(0, headerEnd);
+                    client->bodyOffSet = headerEnd + 2;
                     hasHeader = true;
-                }
+					 extractCGIHeaders(cgiHeaders, contentType, status);
+                } else {
+					size_t headerEnd = headerBuffer.find("\r\n\r\n");
+					std::string cgiHeaders = headerBuffer.substr(0, headerEnd);
+                    client->bodyOffSet = headerEnd + 4;
+					hasHeader = true;
+					extractCGIHeaders(cgiHeaders, contentType, status);
+				}
             }
-
-            //size_t preview_size = 200;
-            //std::cout << "=====CGIHEADER=====" << std::endl;
-            //std::cout << headerBuffer.substr(0, std::min(preview_size, headerBuffer.size())) << std::endl;
-
-            // HANDLE CGI NO HEADER ERROR;
-            if (!hasHeader) {};
+            if (!hasHeader || contentType.empty()) {
+				return errorResponse(client, 500);
+			};
+			response.setHeader("Content-Type", contentType);
+			if (status.empty() == false) {
+				response.setHeader("Status", contentType);
+			}
         }
         client->state = SET_RESPONSE;
         response.setFileContentLength(client->outputPath, client->bodyOffSet);
@@ -587,12 +633,9 @@ void Server::checkChildProcesses()
                 _childProcesses.erase(it++);
                 return;
             }
-            if (t->state != WRITING) {
-                return;
-            }
             struct stat st;
             if (stat(t->outputPath.c_str(), &st) == 0) {
-                // std::cout << "OutputFileSize: " <<  st.st_size << std::endl;
+                std::cout << "OutputFileSize: " <<  st.st_size << std::endl;
             }
             t->getResponse().sendFile = true;
             t->state = PROCESS_CGI;

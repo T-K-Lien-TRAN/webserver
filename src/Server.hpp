@@ -40,8 +40,10 @@ public:
 	Config::LocationConfig *getServerConfig(Client *);
 	void switchEvents(int client_fd, std::string type);
     void handleClientWrite(Client *client);
+	std::string trim(const std::string &s) const;
+	void extractCGIHeaders(const std::string &cgiHeader, std::string &contentType, std::string &status);
 
-	private:
+private:
     std::set<int> _sockets;
     std::vector<struct pollfd> _fds;
     std::vector<Config::LocationConfig *> _locations;
