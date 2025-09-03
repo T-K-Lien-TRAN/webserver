@@ -21,7 +21,7 @@
 
 class Connect;
 
-Request::Request(): 
+Request::Request():
     byteStart(0),
     byteEnd(0),
     _bodyEndIndex(0),
@@ -35,7 +35,7 @@ Request &Request::operator=(const Request &other)
     if (this != &other) {
         byteStart = other.byteEnd;
         byteEnd = other.byteEnd;
-        _bodyEndIndex = other._bodyEndIndex; 
+        _bodyEndIndex = other._bodyEndIndex;
         hasBody = other.hasBody;
         _totalBodySize = other._totalBodySize;
         _chunkSizeToWrite = other._chunkSizeToWrite;
@@ -48,21 +48,18 @@ Request::~Request() {}
 
 bool Request::parseHeader(std::vector<char> &buffer)
 {
+	const char delimiter[] = "\r\n\r\n";
     std::vector<char>::iterator header_end = std::search(
-        buffer.begin(), buffer.end(), "\r\n\r\n", "\r\n\r\n" + 4);
+        buffer.begin(), buffer.end(), delimiter, delimiter + 4);
     if (header_end == buffer.end())
         return false;
-
     std::string headerPart(buffer.begin(), header_end);
-
     std::istringstream stream(headerPart);
     std::string line;
-
     // First line: Request Line
     if (!std::getline(stream, line))
         return false;
     parseRequestLine(line);
-
     // Other lines: Headers
     std::string headers;
     while (std::getline(stream, line))
@@ -72,27 +69,19 @@ bool Request::parseHeader(std::vector<char> &buffer)
         headers += line;
         headers += "\n";
     }
-
     parseHeaders(headers);
-
     // Extract host (without port)
     this->_host = getHeader("Host");
     size_t index = this->_host.find(":");
-
     this->_hostname = this->_host;
 
-    if (index != std::string::npos)
-    {
+    if (index != std::string::npos) {
         this->_hostname = this->_host.substr(0, index);
     }
-
     this->byteStart = std::distance(buffer.begin(), header_end) + 4;
-
-    if (!getHeader("Content-Length").empty() || !getHeader("Transfer-Encoding").empty())
-    {
+    if (!getHeader("Content-Length").empty() || !getHeader("Transfer-Encoding").empty()) {
         this->hasBody = true;
     }
-
     return true;
 }
 
@@ -107,8 +96,7 @@ void Request::parseHeaders(const std::string &headerSection)
     std::istringstream stream(headerSection);
     std::string line;
     //std::cout << std::endl << "=====request=====" << std::endl;
-    while (std::getline(stream, line))
-    {
+    while (std::getline(stream, line)) {
         //std::cout << line << std::endl;
         std::string::size_type pos = line.find(":");
         if (pos == std::string::npos)
@@ -139,7 +127,7 @@ int Request::multiform(Client &client, size_t bodyLength, size_t maxBodySize)
             std::string file = "filename=\"";
             bufferIt it = std::search(
                     client.buffer.begin() + byteStart, client.buffer.end(), file.begin(), file.end());
-            if (it == client.buffer.end()) { 
+            if (it == client.buffer.end()) {
                 break;
             }
             size_t index = std::distance(client.buffer.begin() + byteStart, it) + file.size();
@@ -150,14 +138,14 @@ int Request::multiform(Client &client, size_t bodyLength, size_t maxBodySize)
         }
         if (!this->_multipart.hasFilepath) {
             bufferIt endIt = std::find(client.buffer.begin() + byteStart, client.buffer.end(), '"');
-            if (endIt == client.buffer.end()) { 
+            if (endIt == client.buffer.end()) {
                 this->_multipart.file.append(client.buffer.data() + byteStart,
                     byteEnd - byteStart);
                 break;
             }
             this->_multipart.file.append(client.buffer.data() + byteStart,
                     std::distance(client.buffer.begin() + byteStart, endIt));
-            size_t index = std::distance(client.buffer.begin() + byteStart, endIt) + 1; 
+            size_t index = std::distance(client.buffer.begin() + byteStart, endIt) + 1;
             byteStart += index;
             _totalBodySize += index;
             std::string filepath = client.location->root + "/" + this->_multipart.file;
@@ -168,10 +156,10 @@ int Request::multiform(Client &client, size_t bodyLength, size_t maxBodySize)
             std::string delimiter = "\r\n\r\n";
             bufferIt it = std::search(
                     client.buffer.begin() + byteStart, client.buffer.end(), delimiter.begin(), delimiter.end());
-            if (it == client.buffer.end()) { 
+            if (it == client.buffer.end()) {
                 break;
             }
-            size_t index = std::distance(client.buffer.begin() + byteStart, it) + delimiter.size(); 
+            size_t index = std::distance(client.buffer.begin() + byteStart, it) + delimiter.size();
             byteStart += index;
             _totalBodySize += index;
             this->_multipart.data = true;
@@ -284,7 +272,7 @@ int Request::parseBody(Client &client)
     std::string contentLength = getHeader("Content-Length");
     size_t bodyLength = std::strtoul(contentLength.c_str(), NULL, 10);
     size_t maxBodySize = client.location->maxBodySize;
-    
+
     if (getHeader("Content-Type").find("multipart/form-data") != std::string::npos) {
         return multiform(client, bodyLength, maxBodySize);
     } else if (getHeader("Transfer-Encoding") == "chunked") {
@@ -298,7 +286,7 @@ int Request::parseBody(Client &client)
                 std::vector<char>::iterator it = std::search(
                     client.buffer.begin() + byteStart, client.buffer.end(), headerEnd.begin(), headerEnd.end()
                 );
-                if (it == client.buffer.end()) { 
+                if (it == client.buffer.end()) {
                     break;
                 }
                 chunk.hex.assign(client.buffer.begin() + byteStart, it);
@@ -307,11 +295,11 @@ int Request::parseBody(Client &client)
             }
             if (!chunk.chunckSize && !chunk.bytesRead)
             {
-                if (byteEnd >= byteStart + 2) { 
-                    byteStart += 2; 
+                if (byteEnd >= byteStart + 2) {
+                    byteStart += 2;
                 }
-                if (_out.is_open()) { 
-                    _out.close(); 
+                if (_out.is_open()) {
+                    _out.close();
                 }
                 return 0;
             }
@@ -327,11 +315,12 @@ int Request::parseBody(Client &client)
                 byteStart += toWrite;
                 chunk.bytesRead += toWrite;
                 _totalBodySize += toWrite;
+				std::cout << "Finished: " << std::endl;
                 //std::cout << "\rTotalChunk: " << _totalBodySize << " " << std::flush;
             }
             if (maxBodySize && this->_totalBodySize > maxBodySize) {
-                return 2; 
-            } 
+                return 2;
+            }
             if (chunk.bytesRead < chunk.chunckSize) {
                 break;
             }

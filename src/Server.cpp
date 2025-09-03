@@ -36,16 +36,16 @@ void Server::handleClientWrite(Client *client)
     ssize_t byteSend = 0;
     size_t toSend;
     if (res._indexByteSend == 0) {
-        std::cout << "[Client# " << client->getId() << "]" << std::endl;
-        std::cout << "res.headerByteSize: " << res.headerByteSize << std::endl;
-        std::cout << "res._indexByteSend: " << res._indexByteSend << std::endl;
-        std::cout << "res._outputLength: " << res._outputLength << std::endl;
-        std::cout << "byteSend: " << byteSend << std::endl;
-        std::cout << "res.sendFile: " << res.sendFile << std::endl;
-        //size_t preview_size = 80;
-        //std::cout << "=====response=====" << std::endl;
-        //std::cout << res.output.substr(0, std::min(preview_size, res.output.size())) << std::endl;
-        //std::cout << "=================" << std::endl;
+        // std::cout << "[Client# " << client->getId() << "]" << std::endl;
+        // std::cout << "res.headerByteSize: " << res.headerByteSize << std::endl;
+        // std::cout << "res._indexByteSend: " << res._indexByteSend << std::endl;
+        // std::cout << "res._outputLength: " << res._outputLength << std::endl;
+        // std::cout << "byteSend: " << byteSend << std::endl;
+        // std::cout << "res.sendFile: " << res.sendFile << std::endl;
+        // size_t preview_size = 200;
+        // std::cout << "=====response=====" << std::endl;
+        // std::cout << res.output.substr(0, std::min(preview_size, res.output.size())) << std::endl;
+        // std::cout << "=================" << std::endl;
     }
     if (res.headerByteSize > res._indexByteSend) {
         toSend = std::min(CHUNK_SIZE, res.headerByteSize  - res._indexByteSend);
@@ -80,8 +80,8 @@ void Server::handleClientWrite(Client *client)
             res.bodyByteIndex += byteSend;
         }
     }
-    if (byteSend > 0) { 
-        res._indexByteSend += byteSend; 
+    if (byteSend > 0) {
+        res._indexByteSend += byteSend;
     }
     if (byteSend <= 0) { return; }
 
@@ -91,7 +91,7 @@ void Server::handleClientWrite(Client *client)
         close(client->write_fd);
         client->state = COMPLETED;
         return;
-    } 
+    }
 }
 
 Server::Server() {}
@@ -114,28 +114,21 @@ Server::~Server()
 bool Server::setup(Config &config)
 {
     signal(SIGPIPE, SIG_IGN);
-    std::vector<ServerConfig> &t = config.getServers();
-
+    std::vector<Config::ServerConfig> &server = config.getServers();
     std::set<int> init_port;
-
-    for (size_t i = 0; i < t.size(); ++i)
-        init_port.insert(t[i].port);
-
+    for (size_t i = 0; i < server.size(); ++i)
+        init_port.insert(server[i].port);
     for (std::set<int>::iterator it = init_port.begin(); it != init_port.end(); ++it)
     {
         int server_fd = this->createSocket(*it);
-        if (server_fd > 0)
-        {
-            for (size_t i = 0; i < t.size(); ++i)
-            {
-                if (t[i].port == *it)
-                {
-                    t[i].server_fd = server_fd;
-                    for (size_t at = 0; at < t[i].locations.size(); ++at)
-                    {
-                        if (t[i].locations[at].port == *it) {
-                            t[i].locations[at].port = *it;
-                            this->_locations.push_back(&t[i].locations[at]); 
+        if (server_fd > 0) {
+            for (size_t i = 0; i < server.size(); ++i) {
+                if (server[i].port == *it) {
+                    server[i].server_fd = server_fd;
+                    for (size_t at = 0; at < server[i].locations.size(); ++at) {
+                        if (server[i].locations[at].port == *it) {
+                            server[i].locations[at].port = *it;
+                            this->_locations.push_back(&server[i].locations[at]);
                         }
                     }
                 }
@@ -151,45 +144,37 @@ int Server::createSocket(int port)
     sockaddr_in addr;
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-
-    if (server_fd < 0)
-    {
+    if (server_fd < 0) {
         std::cerr << "Error: Socket on port: " << port << std::endl;
         return 0;
     }
-
     fcntl(server_fd, F_SETFL, O_NONBLOCK);
-
+	int opt = 1;
+	if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+		perror("setsockopt SO_REUSEADDR failed");
+		exit(EXIT_FAILURE);
+	}
     std::memset(&addr, 0, sizeof(addr));
-
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(port);
-
-    if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
-    {
+    if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         std::cerr << "Error: Fail to bind port: " << port << std::endl;
         close(server_fd);
         return 0;
     }
-
-    if (listen(server_fd, 100) < 0)
-    {
+    if (listen(server_fd, 100) < 0) {
         std::cerr << "Error: Fail to listen port: " << port << std::endl;
         close(server_fd);
         return 0;
     }
-
     std::cout << "Listening on port " << port << std::endl;
-
     struct pollfd pfd;
     pfd.fd = server_fd;
     pfd.events = POLLIN;
     pfd.revents = 0;
-
     this->_fds.push_back(pfd);
     this->_sockets.insert(server_fd);
-
     return server_fd;
 }
 
@@ -211,24 +196,31 @@ bool Server::removeClientByFd(const int client_fd)
     delete client;
     return true;
 }
+void Server::backslashNormalize(std::string &string) {
+	if (!string.empty() && string[string.size() - 1] == '/') {
+		string.erase(string.size() - 1);
+	}
+}
 
-LocationConfig *Server::getServerConfig(Client *client)
+Config::LocationConfig *Server::getServerConfig(Client *client)
 {
     size_t maxLength = 0;
-    LocationConfig *bestLocation = NULL;
+    Config::LocationConfig *bestLocation = NULL;
     std::string requestURI = client->getRequest().getURI();
     for (size_t it = 0; it < this->_locations.size(); ++it) {
         std::string locationPath = this->_locations[it]->path;
+		// std::cout << "URI: " << requestURI << std::endl;
+		// std::cout << "LocationPath: " << locationPath << std::endl;
         if (locationPath != "/" && requestURI != "/") {
-            if (requestURI[requestURI.size() - 1] == '/') {
-                requestURI.erase(requestURI.size() - 1);
-            }
-            if (locationPath[locationPath.size() - 1] == '/') {
-                locationPath.erase(locationPath.size() - 1);
-            }
-        } 
-        if (!requestURI.compare(0, locationPath.size(), locationPath)) {
-            if (requestURI.size() == locationPath.size() || requestURI[locationPath.size()] == '/') {
+			backslashNormalize(requestURI);
+			backslashNormalize(locationPath);
+        }
+        if (requestURI.compare(0, locationPath.size(), locationPath) == 0) {
+			bool isExactMatch = requestURI.size() == locationPath.size();
+			bool isRoot = (locationPath == "/");
+			bool hasTrailingSlash = (requestURI.size() > locationPath.size() &&
+				requestURI[locationPath.size()] == '/');
+            if (isExactMatch || hasTrailingSlash || isRoot) {
                 if (locationPath.size() > maxLength) {
                     bestLocation = this->_locations[it];
                     maxLength = locationPath.size();
@@ -255,7 +247,7 @@ void Server::switchEvents(int client_fd, std::string type)
             }
         }
     }
-    
+
 }
 
 bool Server::isAllowedMethod(std::vector<std::string> allowed_methods, std::string method)
@@ -270,24 +262,18 @@ bool Server::isAllowedMethod(std::vector<std::string> allowed_methods, std::stri
 void Server::acceptNewConnection(int server_fd)
 {
     struct sockaddr_in client_addr;
-
     socklen_t client_len = sizeof(client_addr);
     int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
-
-    if (client_fd < 0)
+    if (client_fd < 0) {
         return;
-
+	}
     fcntl(client_fd, F_SETFL, O_NONBLOCK);
-
     struct pollfd pfd;
     pfd.fd = client_fd;
     pfd.events = POLLIN;
     pfd.revents = 0;
-
     std::cout << std::endl << "Connected:" << inet_ntoa(client_addr.sin_addr) << std::endl;
-
     this->_clients[client_fd] = new Client(client_fd, server_fd);
-
     this->_fds.push_back(pfd);
 }
 
@@ -295,8 +281,8 @@ void Server::run() {
     while (true) {
         int ret = poll(&_fds[0], _fds.size(), 1000);
         this->checkChildProcesses();
-        if (ret <= 0) { 
-            continue; 
+        if (ret <= 0) {
+            continue;
         }
         for (size_t i = 0; i < _fds.size(); ++i) {
             int fd = _fds[i].fd;
@@ -307,12 +293,12 @@ void Server::run() {
                 }
             }
             if (client) {
-                if (_fds[i].revents & POLLOUT) { 
-                    handleClientWrite(client); 
+                if (_fds[i].revents & POLLOUT) {
+                    handleClientWrite(client);
                 } else if (_fds[i].revents & POLLIN) {
-                    handleClientData(client); 
+                    handleHeaderBody(client);
                 }
-                handleResponse(client);
+                handleRequest(client);
             }
         }
         for (fdsIt it = _fds.begin(); it != _fds.end(); ) {
@@ -326,7 +312,16 @@ void Server::run() {
     }
 }
 
-void Server::handleClientData(Client *client)
+void Server::locationFallBack(Client *client) {
+	for (size_t it = 0; it < this->_locations.size(); ++it) {
+		if (this->_locations[it]->path == "/") {
+			client->location = this->_locations[it];
+			break;
+		}
+	}
+}
+
+void Server::handleHeaderBody(Client *client)
 {
     Response &response = client->getResponse();
     Request &request = client->getRequest();
@@ -335,11 +330,12 @@ void Server::handleClientData(Client *client)
         client->receive();
     }
     if (client->state == HEADER) {
+		//  std::cout << "HEADER" << std::endl;
         if (client->parseHeader() && !client->location) {
             client->location = this->getServerConfig(client);
             if (client->location) {
-                std::cout << "=== location ===" << std::endl;
-                std::cout << *client->location << std::endl;
+                // std::cout << "=== location ===" << std::endl;
+                // std::cout << *client->location << std::endl;
                 if (!isAllowedMethod(client->location->allowed_methods, request.getMethod())) {
                     return errorResponse(client, 405);
                 }
@@ -351,11 +347,11 @@ void Server::handleClientData(Client *client)
                     }
                 }
                 std::string uri = request.getURI();
-                std::cout << "uri: " << uri << std::endl;
+                // std::cout << "uri: " << uri << std::endl;
                 std::string method = request.getMethod();
                 std::string local = client->location->path;
-                client->systemPath = client->location->root;      
-                if (uri.rfind(local, 0) == 0) {     
+                client->systemPath = client->location->root;
+                if (uri.rfind(local, 0) == 0) {
                     std::string relative = uri.substr(local.size());
                     if (!relative.empty()) {
                         if (client->systemPath[client->systemPath.size()-1] != '/' && relative[0] != '/') {
@@ -366,7 +362,7 @@ void Server::handleClientData(Client *client)
                         client->systemPath += relative;
                     }
                 }
-                std::cout << "Path[1]: " << client->systemPath << std::endl;
+                 std::cout << "Path[1]: " << client->systemPath << std::endl;
                 if (this->isDirectory("./" + client->systemPath)) {
                     if (client->location->index.empty() == false) {
                         if (client->systemPath[client->systemPath.size()-1] != '/') {
@@ -374,37 +370,18 @@ void Server::handleClientData(Client *client)
                         }
                         client->systemPath += client->location->index;
                     }
-                    std::cout << "Path[2]: " << client->systemPath << std::endl;
+                	// std::cout << "Path[2]: " << client->systemPath << std::endl;
                 }
-                // if (this->isFile(client->systemPath) == false) {
-                //     std::cout << "Path[3]: " << client->systemPath << std::endl;
-                //     if (this->getFileExtension(uri) != client->location->cgiExtension) {
-                //         if (client->location->autoIndex &&
-                //             client->getRequest().getMethod() == "GET") {
-                //                 std::string indexFile = client->location->index;
-                //                 if (!indexFile.empty() && client->systemPath.size() >= indexFile.size()) {
-                //                     client->systemPath.erase(
-                //                         client->systemPath.size() - indexFile.size()
-                //                     );
-                //                 }
-                //                 std::string html = generateAutoIndex(client->systemPath, uri);
-                //                 client->getResponse().setStatus(200);
-                //                 client->getResponse().setBody(html);
-                //                 return this->setResponse(client);
-                //         } else {
-                //             return errorResponse(client, 404);
-                //         }
-                //     }
-                // }
-                if (!request.hasBody) { 
-                    client->state = this->_setState(client); 
+                if (!request.hasBody) {
+                    client->state = this->_setState(client);
                 }
                 if (request.hasBody) {
-                    std::cout << "BODY" << std::endl; 
-                    client->state = BODY; 
+                    std::cout << "BODY" << std::endl;
+                    client->state = BODY;
                 }
-                
+
             } else {
+				locationFallBack(client);
                 return errorResponse(client, 404);
             }
         }
@@ -412,16 +389,28 @@ void Server::handleClientData(Client *client)
 
     if (client->state == BODY) {
         switch (client->parseBody()) {
-            case 0: client->state = this->_setState(client); 
+            case 0: client->state = this->_setState(client);
             break;
-            case 2: errorResponse(client, 413); 
+            case 2: errorResponse(client, 413);
             break;
             case 3: errorResponse(client, 403);
         }
     }
 }
 
-void Server::handleResponse(Client * client)
+void Server::fileToOutput(Client *client, int code, std::string path) {
+	Response &res = client->getResponse();
+	std::ifstream file(path.c_str());
+	if (file.is_open()) {
+		std::ostringstream ss;
+		ss << file.rdbuf();
+		res.setStatus(code);
+		res.setContentType("text/html");
+		res.setBody(ss.str());
+	}
+}
+
+void Server::handleRequest(Client * client)
 {
     Request &request = client->getRequest();
     Response &response = client->getResponse();
@@ -472,7 +461,7 @@ void Server::handleResponse(Client * client)
             //size_t preview_size = 200;
             //std::cout << "=====CGIHEADER=====" << std::endl;
             //std::cout << headerBuffer.substr(0, std::min(preview_size, headerBuffer.size())) << std::endl;
-            
+
             // HANDLE CGI NO HEADER ERROR;
             if (!hasHeader) {};
         }
@@ -481,40 +470,30 @@ void Server::handleResponse(Client * client)
     }
 
     if (client->state == GET) {
-         if (this->isFile(client->systemPath) == false) {
-            std::cout << "Path[3]: " << client->systemPath << std::endl;
-            if (this->getFileExtension(uri) != client->location->cgiExtension) {
-                if (client->location->autoIndex &&
-                    client->getRequest().getMethod() == "GET") {
-                        std::string indexFile = client->location->index;
-                        if (!indexFile.empty() && client->systemPath.size() >= indexFile.size()) {
-                            client->systemPath.erase(
-                                client->systemPath.size() - indexFile.size()
-                            );
-                        }
-                        std::string html = generateAutoIndex(client->systemPath, uri);
-                        client->getResponse().setStatus(200);
-                        client->getResponse().setBody(html);
-                        return this->setResponse(client);
-                } else {
-                    return errorResponse(client, 404);
-                }
-            }
-        }
-        std::ifstream file(client->systemPath.c_str());
-        if (file.is_open()) {
-            std::ostringstream ss;
-            ss << file.rdbuf();
-            response.setStatus(200);
-            response.setContentType("text/html");
-            response.setBody(ss.str());
-        }
-        client->state = SET_RESPONSE;
+		std::cout << "GET" << std::endl;
+		if (isFile(client->systemPath)) {
+			fileToOutput(client, 200, client->systemPath);
+        	client->state = SET_RESPONSE;
+			return;
+		}
+		if (client->location->autoIndex) {
+			std::string indexFile = client->location->index;
+			if (!indexFile.empty() && client->systemPath.size() >= indexFile.size()) {
+				client->systemPath.erase(
+					client->systemPath.size() - indexFile.size()
+				);
+			}
+			std::string html = generateAutoIndex(client->systemPath, uri);
+			client->getResponse().setStatus(200);
+			client->getResponse().setBody(html);
+			return this->setResponse(client);
+		}
+		return errorResponse(client, 404);
     }
 
     if (client->state == POST) {
         response.setStatus(201);
-        response.setHeader("Location", client->getRequest().getMethod());   
+        response.setHeader("Location", client->getRequest().getMethod());
         client->state = SET_RESPONSE;
     }
 
@@ -596,18 +575,14 @@ void Server::checkChildProcesses()
         pid_t result = waitpid(it->first, &status, WNOHANG);
         if (result > 0) {
             Client *t = this->_clients[it->second];
-            std::cout << "Process " << it->first << " finished. Status: " << status << std::endl;
             if (WIFEXITED(status)) {
                 int exitStatus = WEXITSTATUS(status);
-                std::cout << "Process exited normally with status: " << exitStatus << std::endl;
                 if (exitStatus != 0) {
                     this->errorResponse(t, 500);
                     _childProcesses.erase(it++);
                     return;
                 }
             } else if (WIFSIGNALED(status)) {
-                int signum = WTERMSIG(status);
-                std::cout << "Process terminated by signal: " << signum << std::endl;
                 this->errorResponse(t, 500);
                 _childProcesses.erase(it++);
                 return;
@@ -617,11 +592,11 @@ void Server::checkChildProcesses()
             }
             struct stat st;
             if (stat(t->outputPath.c_str(), &st) == 0) {
-                std::cout << "OutputFileSize: " <<  st.st_size << std::endl;
+                // std::cout << "OutputFileSize: " <<  st.st_size << std::endl;
             }
             t->getResponse().sendFile = true;
             t->state = PROCESS_CGI;
-            handleResponse(t);
+            handleRequest(t);
             _childProcesses.erase(it++);
             return;
         } else if (result == -1) {
@@ -630,7 +605,7 @@ void Server::checkChildProcesses()
         } else {
             ++it;
         }
-    } 
+    }
 }
 
 bool Server::disconnect(Client &client)
@@ -647,14 +622,33 @@ bool Server::disconnect(Client &client)
     return false;
 }
 
-void Server::errorResponse(Client *t, int code)
+void Server::errorResponse(Client *client, int code)
 {
-    Response &res = t->getResponse();
-    res.setDefaultErrorBody(code);
-    res.build();
-    t->state = PROCESS_RESPONSE;
-    switchEvents(t->client_fd, "POLLOUT");
-    handleClientWrite(t);
+    Response &res = client->getResponse();
+	if (client->location == NULL) {
+		res.setDefaultErrorBody(500);
+		return setResponse(client);
+	}
+	serverMapIt hasErrorSrv = client->location->fallbackErrorPages->find(code);
+	if (hasErrorSrv != client->location->fallbackErrorPages->end()) {
+		std::string path = client->location->serverRoot + hasErrorSrv->second;
+		// std::cout << "ServerLocalError: " << path << std::endl;
+		if (isFile(path)) {
+			fileToOutput(client, code, path);
+			return setResponse(client);
+		}
+	}
+	serverMapIt hasErrorLocal = client->location->customError.find(code);
+	if (hasErrorLocal != client->location->customError.end()) {
+		std::string path = client->location->serverRoot + hasErrorLocal->second;
+		// std::cout << "CustomLocalError: " << path << std::endl;
+		if (isFile(path)) {
+			fileToOutput(client, code, path);
+			return setResponse(client);
+		}
+	}
+	res.setDefaultErrorBody(code);
+    return setResponse(client);
 }
 
 enum ClientState Server::_setState(Client *client)
@@ -678,7 +672,7 @@ std::string Server::getFileExtension(const std::string &uri)
     size_t dot = uri.rfind('.');
     if (dot != std::string::npos) {
         return uri.substr(dot);
-    } 
+    }
     return "NOT FOUND";
 }
 
@@ -700,7 +694,7 @@ std::string Server::generateAutoIndex(const std::string &dirPath, const std::str
             link += "/";
             name += "/";
         }
-        html << "<a href=\"" << link << "\">" << name << "</a>\n"; 
+        html << "<a href=\"" << link << "\">" << name << "</a>\n";
     }
     closedir(dir);
     html << "</pre><hr></body></html>";
@@ -718,7 +712,7 @@ void Server::setResponse(Client *client)
 
 bool Server::isCGI(Client *client)
 {
-    return ((client->location->cgiPass.empty() == false || 
+    return ((client->location->cgiPass.empty() == false ||
          client->location->cgiBin.empty() == false ) &&
         (getFileExtension(client->systemPath) == client->location->cgiExtension));
 }

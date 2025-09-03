@@ -34,25 +34,27 @@ public:
     ~Server();
 
     void run();
-    bool setup(Config &config);
-    Client *findByClientFd(const int client_fd);
+	bool setup(Config &config);
+	Client *findByClientFd(const int client_fd);
     bool removeClientByFd(const int client_fd);
-    LocationConfig* getServerConfig(Client *);
-    void switchEvents(int client_fd, std::string type);
+	Config::LocationConfig *getServerConfig(Client *);
+	void switchEvents(int client_fd, std::string type);
     void handleClientWrite(Client *client);
 
-private:
+	private:
     std::set<int> _sockets;
     std::vector<struct pollfd> _fds;
-    std::vector<LocationConfig *> _locations;
+    std::vector<Config::LocationConfig *> _locations;
     std::map<int, Client *> _clients;
     std::map<int, int> _childProcesses;
 
+
     int createSocket(int);
     void acceptNewConnection(int);
-    void handleClientData(Client *);
-    void handleResponse(Client *);
-    bool isAllowedMethod(std::vector<std::string>, std::string);
+    void handleHeaderBody(Client *);
+	void fileToOutput(Client *client, int code, std::string path);
+	void handleRequest(Client *);
+	bool isAllowedMethod(std::vector<std::string>, std::string);
     void runCgi(Client *client, const std::string &scriptPath, const std::string &interpreter);
     bool isDirectory(const std::string &path);
     bool isFile(const std::string &path);
@@ -64,6 +66,8 @@ private:
     std::string generateAutoIndex(const std::string &dirPath, const std::string &requestPath);
     void setResponse( Client *client );
     bool isCGI(Client *client);
+	void backslashNormalize(std::string &string);
+	void locationFallBack(Client *client);
 };
 
 #endif

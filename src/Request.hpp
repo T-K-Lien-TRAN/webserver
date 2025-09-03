@@ -13,7 +13,7 @@
 #ifndef REQUEST_HPP
 #define REQUEST_HPP
 
-#include <memory> 
+#include <memory>
 #include <map>
 #include <string>
 #include <fstream>
@@ -41,16 +41,14 @@ struct Multipart {
     bool hasFilepath;
     bool data;
     std::string nextBondary;
-    bool reset;
 
     Multipart():
         boundary(""),
-        hasFileHeader(false), 
+        hasFileHeader(false),
         file(""),
         hasFilepath(false),
         data(false),
-        nextBondary(""),
-        reset(false) {}
+        nextBondary("") {}
 };
 
 class Request {
@@ -78,7 +76,7 @@ public:
     void setCGIEnvironment(Client *client) const;
 
 private:
-    std::string _hostname; 
+    std::string _hostname;
     std::string _method;
     std::string _uri;
     std::string _version;
@@ -89,7 +87,7 @@ private:
     size_t _chunkSizeToWrite;
     size_t _totalBytesRead;
     bool _complete;
-    
+
 
     std::map<std::string, std::string> _headers;
     std::ofstream _out;

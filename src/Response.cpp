@@ -12,8 +12,8 @@
 
 #include "Response.hpp"
 #include <sstream>
-#include <fcntl.h>  
-#include <unistd.h>   
+#include <fcntl.h>
+#include <unistd.h>
 #include <iostream>
 #include <sys/stat.h>
 
@@ -52,8 +52,8 @@ void Response::setFileContentLength(std::string path, size_t bodyOffSet)
         std::ostringstream oss;
         oss << st.st_size - bodyOffSet;
         _headers["Content-Length"] = oss.str();
-        std::cout << "bodyOffSet: " << bodyOffSet << std::endl;
-        std::cout << "st.st_size: " << st.st_size << std::endl;
+        // std::cout << "bodyOffSet: " << bodyOffSet << std::endl;
+        // std::cout << "st.st_size: " << st.st_size << std::endl;
         _outputLength = st.st_size - bodyOffSet;
     }
 }

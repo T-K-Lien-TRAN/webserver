@@ -15,17 +15,19 @@
 #include <sstream>
 #include <cctype>
 #include <cstdlib>
-#include <fcntl.h>  // open
-#include <unistd.h> // read, close
+#include <fcntl.h>
+#include <unistd.h>
 #include <cerrno>
-#include <cstring> // strerror
+#include <cstring>
 #include <ostream>
+
+std::map<int, std::string> Config::emptyErrorMap;
 
 Config::Config() {}
 
 Config::~Config() {}
 
-bool Config::_isRootSet(const ServerConfig &server) const {
+bool Config::isRootSet(const ServerConfig &server) const {
     for (size_t it = 0; it < server.locations.size() ; ++it) {
         if ( server.locations[it].path == "/")
             return true;
@@ -33,15 +35,22 @@ bool Config::_isRootSet(const ServerConfig &server) const {
     return false;
 }
 
-std::vector<ServerConfig> &Config::getServers()
-{
+void Config::copyErrorPages(std::map<int, std::string> &local, std::map<int, std::string> &srv) {
+	for (serverMapIt serverIt = srv.begin(); serverIt != srv.end(); ++serverIt) {
+		serverMapIt localIt = local.find(serverIt->first);
+		if (localIt == local.end()) {
+			local[serverIt->first] = serverIt->second;
+		}
+	}
+}
 
+std::vector<Config::ServerConfig> &Config::getServers()
+{
     for (size_t i = 0; i < _servers.size(); ++i) {
         ServerConfig &srv = _servers[i];
-        _validate(srv);
-
+        validate(srv);
         // If no root location exists, create it
-        if (!_isRootSet(srv)) {
+        if (!isRootSet(srv)) {
             LocationConfig root;
             root.path = "/";
             root.root = srv.root;
@@ -49,8 +58,6 @@ std::vector<ServerConfig> &Config::getServers()
             root.index = srv.index;
             srv.locations.push_back(root);
         }
-
-
         // Inherit missing settings in all locations
         for (size_t j = 0; j < srv.locations.size(); ++j) {
             LocationConfig &local = srv.locations[j];
@@ -60,8 +67,13 @@ std::vector<ServerConfig> &Config::getServers()
                 local.maxBodySize = srv.maxBodySize;
             if (local.index.empty())
                 local.index = srv.index;
+			if (srv.customError.empty() == false)
+				copyErrorPages(local.customError, srv.customError);
+			if (srv.root.empty() == false)
+				local.serverRoot = srv.root;
             local.port = srv.port;
             local.server_name = srv.server_name;
+			local.fallbackErrorPages = &srv.customError;
         }
     }
     return _servers;
@@ -87,7 +99,7 @@ std::string trim(const std::string &line)
     return line.substr(start, end - start + 1);
 }
 
-void Config::_validate(const ServerConfig &config) const
+void Config::validate(const ServerConfig &config) const
 {
     if (config.port < 0)
         throw std::runtime_error("Error: listen directive");
@@ -98,12 +110,12 @@ void Config::_validate(const ServerConfig &config) const
 size_t Config::parseSize(const std::string &str)
 {
     if (str.empty()) return -1;
-    
+
     size_t multiplier = 1;
     std::string numberPart = str;
 
     char type = str[str.size() - 1];
-    
+
     if (type == 'M' || type == 'm') {
         multiplier = 1024 * 1024;
         numberPart = str.substr(0, str.size() - 1);
@@ -144,7 +156,7 @@ std::vector<std::string> tokenize(const std::string &line)
     return tokens;
 }
 
-void getMethods(std::vector<std::string> &tokens, LocationConfig &t)
+void getMethods(std::vector<std::string> &tokens, Config::LocationConfig &t)
 {
     for (size_t it = 1; it < tokens.size(); ++it)
         t.allowed_methods.push_back(tokens[it]);
@@ -244,7 +256,7 @@ bool Config::parseFile(const std::string &filename)
                 if (tokens[0] == "max_body_size")
                     current.maxBodySize = this->parseSize(tokens[1]);
                 else
-                    _commonToken(tokens, current);
+                    commonToken(tokens, current);
             }
 
             if (!inside_location && line.find("location") == 0 && line.find("{") != std::string::npos)
@@ -277,8 +289,8 @@ bool Config::parseFile(const std::string &filename)
                         location.allow_upload = true;
                     else if (tokens[0] == "max_body_size")
                         location.maxBodySize = std::atoi(tokens[1].c_str());
-                    else 
-                        _commonToken(tokens, location);
+                    else
+                        commonToken(tokens, location);
                 }
             }
         }
@@ -287,11 +299,10 @@ bool Config::parseFile(const std::string &filename)
     return true;
 }
 
-void Config::_commonToken(std::vector<std::string> &tokens, CommonConfig &input)
+void Config::commonToken(std::vector<std::string> &tokens, CommonConfig &input)
 {
     if (tokens[0] == "error_page") {
-        input.errorPageCode = std::atoi(tokens[1].c_str());
-        input.errorPagePath = tokens[2];
+        input.customError[std::atoi(tokens[1].c_str())] = tokens[2];
     }
     else if (tokens[0] == "redirect") {
         input.redirectCode = std::atoi(tokens[1].c_str());
@@ -299,7 +310,7 @@ void Config::_commonToken(std::vector<std::string> &tokens, CommonConfig &input)
     }
 }
 
-std::ostream& operator<<(std::ostream& os, const LocationConfig& location) {
+std::ostream& operator<<(std::ostream& os, const Config::LocationConfig& location) {
 
     std::string methods;
     if (!location.allowed_methods.empty()) {
@@ -319,8 +330,6 @@ std::ostream& operator<<(std::ostream& os, const LocationConfig& location) {
        << ", uploadStore: " << location.allow_upload
        << ", cgi_pass: " << location.cgiPass
        << ", cgi_bin: " << location.cgiBin
-       << ", errorPageCode: " << location.errorPageCode
-       << ", errorPagePath: " << location.errorPagePath
        << ", redirectCode: " << location.redirectCode
        << ", redirectPath: " << location.redirectPath
        << ", autoIndex: " << (location.autoIndex ? "true" : "false")

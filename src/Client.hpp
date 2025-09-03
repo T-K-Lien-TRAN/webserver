@@ -47,23 +47,14 @@ public:
     std::vector<char> buffer;
     const int client_fd;
     const int server_fd;
+	int write_fd;
     size_t bodyOffSet;
-    int write_fd;
-    int fileFd;
-    std::string writePath;
-
-    LocationConfig* location; 
+    Config::LocationConfig* location;
     ClientState state;
-
-    std::vector<char> output;
-
-    bool hasCGI;
-    bool writingFile;
-    int childPid;
     std::string outputPath;
     std::string inputPath;
     std::string systemPath;
- 
+
     Client(void);
     Client(int client_fd, int server_fd);
     ~Client();
@@ -72,17 +63,12 @@ public:
     std::vector<char> &getBuffer();
     Request &getRequest();
     Response &getResponse();
-
-   
     bool parseHeader();
     int parseBody();
-
-    void reset();
-    void receive();
-    int getId( void ) const;
+	void receive();
+	int getId( void ) const;
 
 private:
-    bool _requestReady;
     Request _request;
     Response _response;
     std::ofstream _out;

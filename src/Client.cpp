@@ -22,29 +22,23 @@
 
 int Client::_counter = 0;
 
-Client::Client(void) : 
-    buffer( 1024 * 16 ), 
-    client_fd(-1), 
+Client::Client(void) :
+    buffer( 1024 * 16 ),
+    client_fd(-1),
     server_fd(-1),
-    write_fd(-1),
-    fileFd(-1),
-    location(NULL), 
-    hasCGI(false),
-    writingFile(false)
+	write_fd(-1),
+    location(NULL)
 {
 }
 
 Client::Client(int client_fd, int server_fd) :
     buffer( 1024 * 16 ),
-    client_fd(client_fd), 
+    client_fd(client_fd),
     server_fd(server_fd),
+	write_fd(-1),
     bodyOffSet(0),
-    write_fd(-1),
-    fileFd(-1),
-    location(NULL), 
-    state(HEADER), 
-    hasCGI(false), 
-    _requestReady(false)
+    location(NULL),
+    state(HEADER)
 {
     this->_request = Request();
     this->_response = Response();
@@ -61,7 +55,7 @@ Client::Client(int client_fd, int server_fd) :
     this->outputPath = oss.str();
 }
 
-Client::~Client() { 
+Client::~Client() {
     std::cout << "[Client#" << _id << "] destroyed" << std::endl;
 }
 
@@ -97,13 +91,6 @@ int Client::parseBody()
     return _request.parseBody(*this);
 }
 
-void Client::reset()
-{
-    buffer.clear();
-    _request = Request();
-    _response = Response();
-    _requestReady = false;
-}
 void Client::receive()
 {
     size_t leftover = 0;
@@ -125,9 +112,9 @@ void Client::receive()
         this->state = COMPLETED;
         return;
     }
-    if (bytesReader < 0) { 
-        perror("recv"); 
-        return; 
+    if (bytesReader < 0) {
+        perror("recv");
+        return;
     }
     _request.byteEnd += bytesReader;
 }
@@ -141,9 +128,6 @@ std::ostream &operator<<(std::ostream &os, const Client &client)
     os << "[Client]"
        << " client_fd: " << client.client_fd
        << ", server_fd: " << client.server_fd
-       << ", write_fd: " << client.write_fd
-       << ", fileFd: " << client.fileFd
-       << ", hasCGI: " << (client.hasCGI ? "true" : "false")
        << ", state: " << client.state;
 
     return os;
