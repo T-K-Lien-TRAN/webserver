@@ -20,6 +20,7 @@
 #include <cerrno>
 #include <cstring>
 #include <ostream>
+#include <sys/stat.h>
 
 std::map<int, std::string> Config::emptyErrorMap;
 
@@ -46,12 +47,20 @@ void Config::copyErrorPages(std::map<int, std::string> &local, std::map<int, std
 
 std::vector<Config::ServerConfig> &Config::getServers()
 {
+	std::map<int, std::string> checkServer;
     for (size_t i = 0; i < _servers.size(); ++i) {
         ServerConfig &srv = _servers[i];
-        validate(srv);
         // If no root location exists, create it
+		serverMapIt it = checkServer.find(srv.port);
+		if (it != checkServer.end()) {
+			if (it->second == srv.server_name) {
+				throw std::runtime_error("Error: server directive.");
+			}
+		} else {
+			checkServer[srv.port] = srv.server_name;
+		}
         if (!isRootSet(srv)) {
-            LocationConfig root;
+			LocationConfig root;
             root.path = "/";
             root.root = srv.root;
             root.maxBodySize = srv.maxBodySize;
@@ -60,13 +69,13 @@ std::vector<Config::ServerConfig> &Config::getServers()
         }
         // Inherit missing settings in all locations
         for (size_t j = 0; j < srv.locations.size(); ++j) {
-            LocationConfig &local = srv.locations[j];
+			LocationConfig &local = srv.locations[j];
             if (local.root.empty())
-                local.root = srv.root;
+				local.root = srv.root;
             if (local.maxBodySize == 0)
-                local.maxBodySize = srv.maxBodySize;
+				local.maxBodySize = srv.maxBodySize;
             if (local.index.empty())
-                local.index = srv.index;
+				local.index = srv.index;
 			if (srv.customError.empty() == false)
 				copyErrorPages(local.customError, srv.customError);
 			if (srv.root.empty() == false)
@@ -74,6 +83,7 @@ std::vector<Config::ServerConfig> &Config::getServers()
             local.port = srv.port;
             local.server_name = srv.server_name;
 			local.fallbackErrorPages = &srv.customError;
+			validate(local);
         }
     }
     return _servers;
@@ -99,37 +109,38 @@ std::string trim(const std::string &line)
     return line.substr(start, end - start + 1);
 }
 
-void Config::validate(const ServerConfig &config) const
+void Config::validate(const LocationConfig &config) const
 {
-    if (config.port < 0)
-        throw std::runtime_error("Error: listen directive");
-    if (trim(config.root) == "")
-        throw std::runtime_error("Error: root directive");
+    if (config.port <= 0 || config.port > 65535)
+        throw std::runtime_error("Error: port directive.");
+    if (trim(config.root).empty() && trim(config.serverRoot).empty())
+        throw std::runtime_error("Error: root directive.");
+	 if (trim(config.path).empty())
+		throw std::runtime_error("Error: location directive.");
+	if (config.path[0] != '/')
+		throw std::runtime_error("Error: location directive.");
+	if (config.server_name.empty())
+		throw std::runtime_error("Error: server_name directive.");
 }
 
 size_t Config::parseSize(const std::string &str)
 {
     if (str.empty()) return -1;
-
     size_t multiplier = 1;
     std::string numberPart = str;
-
     char type = str[str.size() - 1];
 
     if (type == 'M' || type == 'm') {
         multiplier = 1024 * 1024;
         numberPart = str.substr(0, str.size() - 1);
     }
-
     if (type == 'K' || type == 'k') {
         multiplier = 1024;
         numberPart = str.substr(0, str.size() - 1);
     }
-
     size_t value;
     std::istringstream(numberPart) >> value;
     return value * multiplier;
-
 }
 
 std::vector<std::string> tokenize(const std::string &line)

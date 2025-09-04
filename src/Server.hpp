@@ -13,6 +13,8 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
+#define BUFFER_SIZE 4096
+
 #include <vector>
 #include <map>
 #include <string>
@@ -26,10 +28,12 @@ typedef std::vector<struct pollfd>::iterator fdsIt;
 typedef std::map<int,int>::iterator WriteIt;
 typedef std::map<int, pid_t>::iterator ChildIt;
 typedef std::map<int, Client*>::iterator clientList;
+typedef std::set<int>::iterator socketIt;
 
-class Server
-{
+class Server {
 public:
+
+	bool running;
     Server();
     ~Server();
 
@@ -39,7 +43,7 @@ public:
     bool removeClientByFd(const int client_fd);
 	Config::LocationConfig *getServerConfig(Client *);
 	void switchEvents(int client_fd, std::string type);
-    void handleClientWrite(Client *client);
+	void handleClientWrite(Client *client);
 	std::string trim(const std::string &s) const;
 	void extractCGIHeaders(const std::string &cgiHeader, std::string &contentType, std::string &status);
 
@@ -63,12 +67,12 @@ private:
     void checkChildProcesses();
     bool disconnect(Client &client);
     void errorResponse( Client*, int );
-    enum ClientState _setState(Client *client);
+    enum ClientState setState(Client *client);
     std::string getFileExtension(const std::string &uri);
     std::string generateAutoIndex(const std::string &dirPath, const std::string &requestPath);
     void setResponse( Client *client );
     bool isCGI(Client *client);
-	void backslashNormalize(std::string &string);
+	void backSlashNormalize(std::string &string);
 	void locationFallBack(Client *client);
 };
 

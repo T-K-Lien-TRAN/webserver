@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 #include "Server.hpp"
+#include "webserv.hpp"
 #include <iostream>
 #include <sstream>
 #include <cstring>
@@ -27,7 +28,7 @@
 #include <arpa/inet.h>
 #include <dirent.h>
 
-#define BUFFER_SIZE 4096
+Server* g_server = NULL;
 
 void Server::handleClientWrite(Client *client)
 {
@@ -94,26 +95,23 @@ void Server::handleClientWrite(Client *client)
     }
 }
 
-Server::Server() {}
+Server::Server() : running(true) {}
 
-Server::~Server()
-{
-    /* for (size_t i = 0; i < _sockets.size(); ++i) {
-        close(_sockets[i]);
-    } */
-    /* for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
-    {
-        close(it->first);
-    } */
-    /* for (std::map<int, Connect *>::iterator it = _connects.begin(); it != _connects.end(); ++it)
-    {
-        delete it->second;
-    } */
+Server::~Server() {
+	for (fdsIt it = _fds.begin(); it != _fds.end(); ++it) {
+		int fd = it->fd;
+		close(fd);
+	}
+	for (clientList it = _clients.begin(); it != _clients.end(); ++it) {
+		if (it->second) {
+			removeClientByFd(it->second->client_fd);
+		}
+	}
 }
 
 bool Server::setup(Config &config)
 {
-    signal(SIGPIPE, SIG_IGN);
+	g_server = this;
     std::vector<Config::ServerConfig> &server = config.getServers();
     std::set<int> init_port;
     for (size_t i = 0; i < server.size(); ++i)
@@ -135,7 +133,9 @@ bool Server::setup(Config &config)
             }
         }
     }
-
+	if (this->_sockets.empty()) {
+		throw std::runtime_error("Error: ports mount fail.");
+	}
     return true;
 }
 
@@ -194,9 +194,10 @@ bool Server::removeClientByFd(const int client_fd)
     ::remove(client->outputPath.c_str());
     this->_clients.erase(it);
     delete client;
+	client = NULL;
     return true;
 }
-void Server::backslashNormalize(std::string &string) {
+void Server::backSlashNormalize(std::string &string) {
 	if (!string.empty() && string[string.size() - 1] == '/') {
 		string.erase(string.size() - 1);
 	}
@@ -207,13 +208,15 @@ Config::LocationConfig *Server::getServerConfig(Client *client)
     size_t maxLength = 0;
     Config::LocationConfig *bestLocation = NULL;
     std::string requestURI = client->getRequest().getURI();
+
     for (size_t it = 0; it < this->_locations.size(); ++it) {
+		if (_locations[it]->server_fd != client->server_fd) {
+			continue;
+		}
         std::string locationPath = this->_locations[it]->path;
-		// std::cout << "URI: " << requestURI << std::endl;
-		// std::cout << "LocationPath: " << locationPath << std::endl;
         if (locationPath != "/" && requestURI != "/") {
-			backslashNormalize(requestURI);
-			backslashNormalize(locationPath);
+			backSlashNormalize(requestURI);
+			backSlashNormalize(locationPath);
         }
         if (requestURI.compare(0, locationPath.size(), locationPath) == 0) {
 			bool isExactMatch = requestURI.size() == locationPath.size();
@@ -233,11 +236,8 @@ Config::LocationConfig *Server::getServerConfig(Client *client)
 
 void Server::switchEvents(int client_fd, std::string type)
 {
-
-    for (size_t i = 0; i < _fds.size(); ++i)
-    {
-        if (_fds[i].fd == client_fd)
-        {
+    for (size_t i = 0; i < _fds.size(); ++i) {
+        if (_fds[i].fd == client_fd) {
             if (type == "POLLOUT") {
                 _fds[i].events |= POLLOUT;
                 _fds[i].events &= ~POLLIN;
@@ -278,7 +278,7 @@ void Server::acceptNewConnection(int server_fd)
 }
 
 void Server::run() {
-    while (true) {
+    while (g_server->running) {
         int ret = poll(&_fds[0], _fds.size(), 1000);
         this->checkChildProcesses();
         if (ret <= 0) {
@@ -373,7 +373,7 @@ void Server::handleHeaderBody(Client *client)
                 	// std::cout << "Path[2]: " << client->systemPath << std::endl;
                 }
                 if (!request.hasBody) {
-                    client->state = this->_setState(client);
+                    client->state = this->setState(client);
                 }
                 if (request.hasBody) {
                     std::cout << "BODY" << std::endl;
@@ -389,7 +389,7 @@ void Server::handleHeaderBody(Client *client)
 
     if (client->state == BODY) {
         switch (client->parseBody()) {
-            case 0: client->state = this->_setState(client);
+            case 0: client->state = this->setState(client);
             break;
             case 2: errorResponse(client, 413);
             break;
@@ -694,7 +694,7 @@ void Server::errorResponse(Client *client, int code)
     return setResponse(client);
 }
 
-enum ClientState Server::_setState(Client *client)
+enum ClientState Server::setState(Client *client)
 {
     Request &request = client->getRequest();
     if (isCGI(client)) {

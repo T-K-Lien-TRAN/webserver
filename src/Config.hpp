@@ -75,9 +75,9 @@ public:
 
 private:
     std::vector<ServerConfig> _servers;
-    void validate(const ServerConfig &) const;
-    size_t parseSize(const std::string &str);
-    bool isRootSet(const ServerConfig &) const;
+	void validate(const LocationConfig &config) const;
+	size_t parseSize(const std::string &str);
+	bool isRootSet(const ServerConfig &) const;
 	void copyErrorPages(std::map<int, std::string> &local, std::map<int, std::string> &srv);
 	void commonToken(std::vector<std::string> &tokens, CommonConfig &location);
 };

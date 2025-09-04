@@ -12,7 +12,18 @@
 
 #include "Config.hpp"
 #include "Server.hpp"
+#include "webserv.hpp"
 #include <iostream>
+#include <csignal>
+
+void signalHandle(int signal) {
+	std::cerr << "Exit" << std::endl;
+	if (signal == SIGINT) {
+		if (g_server) {
+			g_server->running = false;
+		}
+	}
+}
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -27,17 +38,14 @@ int main(int argc, char* argv[]) {
     }
 
     Server server;
-
-    try
-    {
+	signal(SIGPIPE, SIG_IGN);
+	signal(SIGINT, signalHandle);
+    try {
         server.setup(config);
+		server.run();
     }
-    catch (const std::exception &e)
-    {
+    catch (const std::exception &e) {
         std::cerr << e.what() << std::endl;
     }
-
-    server.run();
-
     return 0;
 }
