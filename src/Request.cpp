@@ -95,7 +95,6 @@ void Request::parseRequestLine(const std::string &line)
 	size_t queryPos = rawUri.find('?');
 	if (queryPos != std::string::npos) {
 		_uri = rawUri.substr(0, queryPos);
-		std::cout << "URI: " << _uri << std::endl;
 		_queryString = rawUri.substr(queryPos + 1);
 	} else {
 		_uri = rawUri;
@@ -209,6 +208,10 @@ int Request::multiform(Client &client, size_t bodyLength, size_t maxBodySize)
             _out.write(client.buffer.data() + byteStart, safeWrite);
             _totalBodySize += safeWrite;
             byteStart += safeWrite;
+			if (_out.fail()) {
+				_out.close();
+				return 4;
+			}
             if (maxBodySize && _totalBodySize > maxBodySize) {
                 return 2;
             }
@@ -229,7 +232,6 @@ int Request::multiform(Client &client, size_t bodyLength, size_t maxBodySize)
                 }
                 return 0;
             }
-
             if (_totalBodySize >= bodyLength) {
                 std::cout << "Finished: " << std::endl;
                 if (_out.is_open()) {
@@ -312,6 +314,7 @@ int Request::parseBody(Client &client)
                 if (_out.is_open()) {
                     _out.close();
                 }
+				std::cout << "Finished: " << std::endl;
                 return 0;
             }
             size_t available = byteEnd - byteStart;
@@ -326,8 +329,10 @@ int Request::parseBody(Client &client)
                 byteStart += toWrite;
                 chunk.bytesRead += toWrite;
                 _totalBodySize += toWrite;
-				std::cout << "Finished: " << std::endl;
-                //std::cout << "\rTotalChunk: " << _totalBodySize << " " << std::flush;
+				if (_out.fail()) {
+					_out.close();
+					return 4;
+				}
             }
             if (maxBodySize && this->_totalBodySize > maxBodySize) {
                 return 2;
@@ -362,6 +367,10 @@ int Request::parseBody(Client &client)
             _out.write(client.buffer.data() + chunk.bytesRead, toWrite);
             chunk.bytesRead += toWrite;
             _totalBodySize += toWrite;
+			if (_out.fail()) {
+				_out.close();
+				return 4;
+			}
         }
         if (maxBodySize < length) {
             return 1;

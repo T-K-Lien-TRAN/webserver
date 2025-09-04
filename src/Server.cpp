@@ -36,18 +36,18 @@ void Server::handleClientWrite(Client *client)
     size_t CHUNK_SIZE = BUFFER_SIZE;
     ssize_t byteSend = 0;
     size_t toSend;
-    if (res._indexByteSend == 0) {
-        // std::cout << "[Client# " << client->getId() << "]" << std::endl;
-        // std::cout << "res.headerByteSize: " << res.headerByteSize << std::endl;
-        // std::cout << "res._indexByteSend: " << res._indexByteSend << std::endl;
-        // std::cout << "res._outputLength: " << res._outputLength << std::endl;
-        // std::cout << "byteSend: " << byteSend << std::endl;
-        // std::cout << "res.sendFile: " << res.sendFile << std::endl;
-        // size_t preview_size = 200;
-        // std::cout << "=====response=====" << std::endl;
-        // std::cout << res.output.substr(0, std::min(preview_size, res.output.size())) << std::endl;
-        // std::cout << "=================" << std::endl;
-    }
+    // if (res._indexByteSend == 0) {
+    //     std::cout << "[Client# " << client->getId() << "]" << std::endl;
+    //     std::cout << "res.headerByteSize: " << res.headerByteSize << std::endl;
+    //     std::cout << "res._indexByteSend: " << res._indexByteSend << std::endl;
+    //     std::cout << "res._outputLength: " << res._outputLength << std::endl;
+    //     std::cout << "byteSend: " << byteSend << std::endl;
+    //     std::cout << "res.sendFile: " << res.sendFile << std::endl;
+    //     size_t preview_size = 200;
+    //     std::cout << "=====response=====" << std::endl;
+    //     std::cout << res.output.substr(0, std::min(preview_size, res.output.size())) << std::endl;
+    //     std::cout << "=================" << std::endl;
+    // }
     if (res.headerByteSize > res._indexByteSend) {
         toSend = std::min(CHUNK_SIZE, res.headerByteSize  - res._indexByteSend);
         byteSend = send(
@@ -74,6 +74,7 @@ void Server::handleClientWrite(Client *client)
         size_t offset = client->bodyOffSet + res.bodyByteIndex;
         ssize_t bytesReader = pread(client->write_fd, client->buffer.data(), client->buffer.size(), offset);
         if (bytesReader <= 0) {
+			client->state = COMPLETED;
             return;
         }
         byteSend = send(client->client_fd, client->buffer.data(), bytesReader, 0);
@@ -84,8 +85,10 @@ void Server::handleClientWrite(Client *client)
     if (byteSend > 0) {
         res._indexByteSend += byteSend;
     }
-    if (byteSend <= 0) { return; }
-
+    if (byteSend <= 0) {
+		client->state = COMPLETED;
+		return;
+	}
     if (res._indexByteSend >= res._outputLength) {
         shutdown(client->client_fd, SHUT_WR);
         switchEvents(client->client_fd, "POLLINN");
@@ -140,7 +143,7 @@ bool Server::setup(Config &config)
         }
     }
 	if (this->_sockets.empty()) {
-		throw std::runtime_error("Error: ports mount fail.");
+		throw std::runtime_error("Error: listen mount fail.");
 	}
     return true;
 }
@@ -340,8 +343,8 @@ void Server::handleHeaderBody(Client *client)
         if (client->parseHeader() && !client->location) {
             client->location = this->getServerConfig(client);
             if (client->location) {
-                std::cout << "=== location ===" << std::endl;
-                std::cout << *client->location << std::endl;
+                // std::cout << "=== location ===" << std::endl;
+                // std::cout << *client->location << std::endl;
                 if (!isAllowedMethod(client->location->allowed_methods, request.getMethod())) {
                     return errorResponse(client, 405);
                 }
@@ -368,7 +371,7 @@ void Server::handleHeaderBody(Client *client)
                         client->systemPath += relative;
                     }
                 }
-                 std::cout << "Path[1]: " << client->systemPath << std::endl;
+                //std::cout << "Path[1]: " << client->systemPath << std::endl;
                 if (this->isDirectory("./" + client->systemPath)) {
                     if (client->location->index.empty() == false) {
                         if (client->systemPath[client->systemPath.size()-1] != '/') {
@@ -397,9 +400,11 @@ void Server::handleHeaderBody(Client *client)
         switch (client->parseBody()) {
             case 0: client->state = this->setState(client);
             break;
-            case 2: errorResponse(client, 413);
+            case 2: return errorResponse(client, 413);
             break;
-            case 3: errorResponse(client, 403);
+            case 3: return errorResponse(client, 403);
+			break;
+			case 4: return errorResponse(client, 500);
         }
     }
 }
@@ -558,9 +563,9 @@ void Server::handleRequest(Client * client)
             response.setBody("<h1>File deleted</h1>");
         }
         else {
-            response.setDefaultErrorBody(404);
+            errorResponse(client, 404);
+			response.setContentType("text/html");
         }
-        response.setContentType("text/html");
         client->state = SET_RESPONSE;
     }
 
@@ -586,7 +591,10 @@ void Server::runCGI(Client *client, const std::string &type, const std::string &
             in = open("/dev/null", O_RDONLY);
         };
         out = open(client->outputPath.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0644);
-        if (in < 0 || out < 0) { perror("open tmp_file"); exit(1); }
+        if (in < 0 || out < 0) {
+			perror("open tmp_file");
+			exit(1);
+		}
         dup2(in, STDIN_FILENO);
         dup2(out, STDOUT_FILENO);
         close(in);
@@ -675,13 +683,12 @@ void Server::errorResponse(Client *client, int code)
 {
     Response &res = client->getResponse();
 	if (client->location == NULL) {
-		res.setDefaultErrorBody(500);
+		errorResponse(client, 500);
 		return setResponse(client);
 	}
 	serverMapIt hasErrorSrv = client->location->fallbackErrorPages->find(code);
 	if (hasErrorSrv != client->location->fallbackErrorPages->end()) {
 		std::string path = client->location->serverRoot + hasErrorSrv->second;
-		// std::cout << "ServerLocalError: " << path << std::endl;
 		if (isFile(path)) {
 			fileToOutput(client, code, path);
 			return setResponse(client);
@@ -690,7 +697,6 @@ void Server::errorResponse(Client *client, int code)
 	serverMapIt hasErrorLocal = client->location->customError.find(code);
 	if (hasErrorLocal != client->location->customError.end()) {
 		std::string path = client->location->serverRoot + hasErrorLocal->second;
-		// std::cout << "CustomLocalError: " << path << std::endl;
 		if (isFile(path)) {
 			fileToOutput(client, code, path);
 			return setResponse(client);

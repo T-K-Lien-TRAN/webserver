@@ -59,27 +59,24 @@ void Response::setFileContentLength(std::string path, size_t bodyOffSet)
 }
 
 void Response::setDefaultErrorBody(int code) {
-    std::ostringstream path;
-    path << "www/error_pages/" << code << ".html";
+    // std::ostringstream path;
+    // path << "www/error_pages/" << code << ".html";
 
-    int fd = open(path.str().c_str(), O_RDONLY);
-    std::string body;
+    // int fd = open(path.str().c_str(), O_RDONLY);
+    // std::string body;
 
-    if (fd != -1) {
-        char buffer[1024];
-        ssize_t bytesRead;
-        while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0) {
-            body.append(buffer, bytesRead);
-        }
-        close(fd);
-    }
+    // if (fd != -1) {
+    //     char buffer[1024];
+    //     ssize_t bytesRead;
+    //     while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0) {
+    //         body.append(buffer, bytesRead);
+    //     }
+    //     close(fd);
+    // }
 
-    if (body.empty()) {
-        std::ostringstream ss;
-        ss << "<html><body><h1>" << code << " " << getStatusMessage(code) << "</h1></body></html>";
-        body = ss.str();
-    }
-
+	std::ostringstream ss;
+	ss << "<html><body><h1>" << code << " " << getStatusMessage(code) << "</h1></body></html>";
+	std::string body = ss.str();
     setBody(body);
     setContentType("text/html");
     setStatus(code);

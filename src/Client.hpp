@@ -59,13 +59,12 @@ public:
     Client(int client_fd, int server_fd);
     ~Client();
 
-    int getFd() const;
+	void receive();
     std::vector<char> &getBuffer();
     Request &getRequest();
     Response &getResponse();
     bool parseHeader();
     int parseBody();
-	void receive();
 	int getId( void ) const;
 
 private:

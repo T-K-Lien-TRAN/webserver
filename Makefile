@@ -6,14 +6,14 @@
 #    By: bde-albu <bde-albu@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2025/08/05 14:52:15 by thitran           #+#    #+#              #
-#    Updated: 2025/09/04 10:09:47 by bde-albu         ###   ########.fr        #
+#    Updated: 2025/09/04 13:23:07 by bde-albu         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
 # Compiler and flags
-DEVFLAG = -fsanitize=address -g -O1
-CXX = c++ -g
-CXXFLAGS = -Wall -Wextra -Werror -std=c++98
+#DEBUGFLAG = -fsanitize=address -g -O1
+CXX = c++
+CXXFLAGS = -Wall -Wextra -Werror -Isrc -std=c++98
 
 # Directories
 SRC_DIR = src
@@ -48,7 +48,7 @@ $(NAME): $(OBJS)
 
 # Compile, put .o files in obj/
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp $(HEADERS) | $(OBJ_DIR)
-	$(CXX) $(CXXFLAGS) -Iinclude -Isrc -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Create obj directory if it doesn't exist
 $(OBJ_DIR):

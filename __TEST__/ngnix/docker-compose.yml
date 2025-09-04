@@ -1,0 +1,17 @@
+services:
+  nginx:
+    build: .
+    container_name: local-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./www:/usr/share/nginx/www:ro
+      - ./YoupiBanane:/usr/share/nginx/YoupiBanane:ro
+      - ./eval.conf:/etc/nginx/eval.conf:ro
+    restart: unless-stopped
+    networks:
+      - nginx-network
+
+networks:
+  nginx-network:
+    driver: bridge

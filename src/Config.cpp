@@ -54,7 +54,8 @@ std::vector<Config::ServerConfig> &Config::getServers()
 		serverMapIt it = checkServer.find(srv.port);
 		if (it != checkServer.end()) {
 			if (it->second == srv.server_name) {
-				throw std::runtime_error("Error: server directive.");
+				std::cerr << it->second << ":" << srv.server_name << std::endl;
+				throw std::runtime_error("Error: double server.");
 			}
 		} else {
 			checkServer[srv.port] = srv.server_name;
@@ -111,8 +112,10 @@ std::string trim(const std::string &line)
 
 void Config::validate(const LocationConfig &config) const
 {
-    if (config.port <= 0 || config.port > 65535)
-        throw std::runtime_error("Error: port directive.");
+    if (config.port <= 0 || config.port > 65535) {
+		std::cout << "Port:" << config.port << std::endl;
+        throw std::runtime_error("Error: listen directive.");
+	}
     if (trim(config.root).empty() && trim(config.serverRoot).empty())
         throw std::runtime_error("Error: root directive.");
 	 if (trim(config.path).empty())

@@ -59,11 +59,6 @@ Client::~Client() {
     std::cout << "[Client#" << _id << "] destroyed" << std::endl;
 }
 
-int Client::getFd() const
-{
-    return client_fd;
-}
-
 std::vector<char> &Client::getBuffer()
 {
     return buffer;
@@ -114,6 +109,7 @@ void Client::receive()
     }
     if (bytesReader < 0) {
         perror("recv");
+		this->state = COMPLETED;
         return;
     }
     _request.byteEnd += bytesReader;
