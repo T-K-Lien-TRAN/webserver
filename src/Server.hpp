@@ -45,9 +45,8 @@ public:
 	void switchEvents(int client_fd, std::string type);
 	void handleClientWrite(Client *client);
 	std::string trim(const std::string &s) const;
-	void extractCGIHeaders(const std::string &cgiHeader, std::string &contentType, std::string &status);
 
-private:
+	private:
     std::set<int> _sockets;
     std::vector<struct pollfd> _fds;
     std::vector<Config::LocationConfig *> _locations;
@@ -61,7 +60,7 @@ private:
 	void fileToOutput(Client *client, int code, std::string path);
 	void handleRequest(Client *);
 	bool isAllowedMethod(std::vector<std::string>, std::string);
-    void runCgi(Client *client, const std::string &scriptPath, const std::string &interpreter);
+    void runCGI(Client *client, const std::string &scriptPath, const std::string &interpreter);
     bool isDirectory(const std::string &path);
     bool isFile(const std::string &path);
     void checkChildProcesses();
@@ -74,6 +73,7 @@ private:
     bool isCGI(Client *client);
 	void backSlashNormalize(std::string &string);
 	void locationFallBack(Client *client);
+	void extractCGIHeaders(const std::string &cgiHeader, std::string &contentType, std::string &status);
 };
 
 #endif

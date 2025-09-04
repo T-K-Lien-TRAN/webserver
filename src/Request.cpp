@@ -88,7 +88,15 @@ bool Request::parseHeader(std::vector<char> &buffer)
 void Request::parseRequestLine(const std::string &line)
 {
     std::istringstream ss(line);
-    ss >> _method >> _uri >> _version;
+	std::string rawUri;
+
+	ss >> _method >> rawUri >> _version;
+
+	size_t queryPos = rawUri.find('?');
+	if (queryPos != std::string::npos) {
+		_uri = rawUri.substr(0, queryPos);
+		_queryString = rawUri.substr(queryPos + 1);
+	}
 }
 
 void Request::parseHeaders(const std::string &headerSection)
@@ -233,10 +241,13 @@ int Request::multiform(Client &client, size_t bodyLength, size_t maxBodySize)
 
 void Request::setCGIEnvironment(Client *client) const
 {
-    setenv("REQUEST_METHOD", getMethod().c_str(), 1);
-    setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
     std::string uri = client->getRequest().getURI();
     std::string path = "/" + client->location->root + uri;
+	std::string query = client->getRequest().getQuery();
+
+	setenv("QUERY_STRING",query.c_str() , 1);
+    setenv("REQUEST_METHOD", getMethod().c_str(), 1);
+    setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
     setenv("SCRIPT_NAME", "", 1);
     setenv("PATH_INFO", path.c_str(), 1);
     if (_headers.count("Content-Length")) {
@@ -405,6 +416,11 @@ std::string Request::getBody(std::vector<char> buffer) const
 std::string Request::getHostname() const
 {
     return _hostname;
+}
+
+std::string Request::getQuery() const
+{
+    return _queryString;
 }
 
 bool Request::isComplete() const

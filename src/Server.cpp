@@ -99,13 +99,18 @@ Server::Server() : running(true) {}
 
 Server::~Server() {
 	for (fdsIt it = _fds.begin(); it != _fds.end(); ++it) {
-		int fd = it->fd;
-		close(fd);
+		if (this->_sockets.count(it->fd)) {
+			close(it->fd);
+		}
 	}
+	std::vector<int> client_fds;
 	for (clientList it = _clients.begin(); it != _clients.end(); ++it) {
 		if (it->second) {
-			removeClientByFd(it->second->client_fd);
+			client_fds.push_back(it->second->client_fd);
 		}
+	}
+	for (size_t i = 0; i < client_fds.size(); ++i) {
+    	removeClientByFd(client_fds[i]);
 	}
 }
 
@@ -114,19 +119,20 @@ bool Server::setup(Config &config)
 	g_server = this;
     std::vector<Config::ServerConfig> &server = config.getServers();
     std::set<int> init_port;
-    for (size_t i = 0; i < server.size(); ++i)
+    for (size_t i = 0; i < server.size(); ++i) {
         init_port.insert(server[i].port);
-    for (std::set<int>::iterator it = init_port.begin(); it != init_port.end(); ++it)
-    {
+	}
+    for (std::set<int>::iterator it = init_port.begin(); it != init_port.end(); ++it) {
         int server_fd = this->createSocket(*it);
         if (server_fd > 0) {
             for (size_t i = 0; i < server.size(); ++i) {
                 if (server[i].port == *it) {
-                    server[i].server_fd = server_fd;
                     for (size_t at = 0; at < server[i].locations.size(); ++at) {
-                        if (server[i].locations[at].port == *it) {
-                            server[i].locations[at].port = *it;
-                            this->_locations.push_back(&server[i].locations[at]);
+						Config::LocationConfig &location = server[i].locations[at];
+                        if (location.port == *it) {
+                            location.port = *it;
+							location.server_fd = server_fd;
+                            this->_locations.push_back(&location);
                         }
                     }
                 }
@@ -211,6 +217,7 @@ Config::LocationConfig *Server::getServerConfig(Client *client)
 
     for (size_t it = 0; it < this->_locations.size(); ++it) {
 		if (_locations[it]->server_fd != client->server_fd) {
+
 			continue;
 		}
         std::string locationPath = this->_locations[it]->path;
@@ -334,8 +341,8 @@ void Server::handleHeaderBody(Client *client)
         if (client->parseHeader() && !client->location) {
             client->location = this->getServerConfig(client);
             if (client->location) {
-                // std::cout << "=== location ===" << std::endl;
-                // std::cout << *client->location << std::endl;
+                std::cout << "=== location ===" << std::endl;
+                std::cout << *client->location << std::endl;
                 if (!isAllowedMethod(client->location->allowed_methods, request.getMethod())) {
                     return errorResponse(client, 405);
                 }
@@ -466,7 +473,7 @@ void Server::handleRequest(Client * client)
             execute = client->location->cgiPass;
             type = "PASS";
         }
-        runCgi(client, type, execute);
+        runCGI(client, type, execute);
     }
 
     if (client->state == PROCESS_CGI)
@@ -563,7 +570,7 @@ void Server::handleRequest(Client * client)
     }
 }
 
-void Server::runCgi(Client *client, const std::string &type, const std::string &execute)
+void Server::runCGI(Client *client, const std::string &type, const std::string &execute)
 {
     pid_t pid = fork();
     if (pid < 0)

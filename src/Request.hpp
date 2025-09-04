@@ -72,14 +72,16 @@ public:
     std::string getHeader(const std::string &key) const;
     std::string getBody(std::vector<char> buffer) const;
     std::string getHostname() const;
-    bool isComplete() const;
-    void setCGIEnvironment(Client *client) const;
+	std::string getQuery() const;
+	bool isComplete() const;
+	void setCGIEnvironment(Client *client) const;
 	std::string trim(const std::string &s) const;
 
 private:
     std::string _hostname;
     std::string _method;
     std::string _uri;
+	std::string _queryString;
     std::string _version;
     std::string _host;
     std::string _body;
