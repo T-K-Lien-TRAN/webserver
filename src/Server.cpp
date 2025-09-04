@@ -217,7 +217,6 @@ Config::LocationConfig *Server::getServerConfig(Client *client)
 
     for (size_t it = 0; it < this->_locations.size(); ++it) {
 		if (_locations[it]->server_fd != client->server_fd) {
-
 			continue;
 		}
         std::string locationPath = this->_locations[it]->path;
@@ -523,12 +522,7 @@ void Server::handleRequest(Client * client)
     }
 
     if (client->state == GET) {
-		std::cout << "GET" << std::endl;
-		if (isFile(client->systemPath)) {
-			fileToOutput(client, 200, client->systemPath);
-        	client->state = SET_RESPONSE;
-			return;
-		}
+		std::cout << "GET: " << client->systemPath << std::endl;
 		if (client->location->autoIndex) {
 			std::string indexFile = client->location->index;
 			if (!indexFile.empty() && client->systemPath.size() >= indexFile.size()) {
@@ -541,7 +535,12 @@ void Server::handleRequest(Client * client)
 			client->getResponse().setBody(html);
 			return this->setResponse(client);
 		}
-		return errorResponse(client, 404);
+		if (isFile(client->systemPath)) {
+			fileToOutput(client, 200, client->systemPath);
+        	client->state = SET_RESPONSE;
+		} else {
+			return errorResponse(client, 404);
+		}
     }
 
     if (client->state == POST) {

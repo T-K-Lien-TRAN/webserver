@@ -336,6 +336,7 @@ std::ostream& operator<<(std::ostream& os, const Config::LocationConfig& locatio
 
     os << "{server_name: " << location.server_name
        << ", path: " << location.path
+	   << ", server_fd: " << location.server_fd
        << ", root: " << location.root
        << ", index: " << location.index
        << ", uploadStore: " << location.allow_upload

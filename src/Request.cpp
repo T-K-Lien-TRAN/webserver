@@ -95,7 +95,10 @@ void Request::parseRequestLine(const std::string &line)
 	size_t queryPos = rawUri.find('?');
 	if (queryPos != std::string::npos) {
 		_uri = rawUri.substr(0, queryPos);
+		std::cout << "URI: " << _uri << std::endl;
 		_queryString = rawUri.substr(queryPos + 1);
+	} else {
+		_uri = rawUri;
 	}
 }
 
