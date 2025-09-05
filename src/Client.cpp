@@ -114,6 +114,7 @@ void Client::receive()
     }
     _request.byteEnd += bytesReader;
 }
+
 int Client::getId(void) const
 {
     return this->_id;

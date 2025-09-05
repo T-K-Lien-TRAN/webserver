@@ -172,8 +172,10 @@ std::vector<std::string> tokenize(const std::string &line)
 
 void getMethods(std::vector<std::string> &tokens, Config::LocationConfig &t)
 {
-    for (size_t it = 1; it < tokens.size(); ++it)
+    for (size_t it = 1; it < tokens.size(); ++it) {
+		std::cout << tokens[it] << std::endl;
         t.allowed_methods.push_back(tokens[it]);
+	}
 }
 
 std::string readFile(const std::string &filename)
@@ -189,8 +191,7 @@ std::string readFile(const std::string &filename)
     ssize_t bytesRead;
     std::string content;
 
-    while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0)
-    {
+    while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0) {
         content.append(buffer, bytesRead);
     }
 
@@ -283,6 +284,7 @@ bool Config::parseFile(const std::string &filename)
             {
                 if (tokens.size() >= 2)
                 {
+					std::cout << tokens[0] << std::endl;
                     if (tokens[0] == "location")
                         location.path = tokens[1];
                     else if (tokens[0] == "root")

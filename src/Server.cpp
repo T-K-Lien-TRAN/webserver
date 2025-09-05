@@ -343,8 +343,8 @@ void Server::handleHeaderBody(Client *client)
         if (client->parseHeader() && !client->location) {
             client->location = this->getServerConfig(client);
             if (client->location) {
-                // std::cout << "=== location ===" << std::endl;
-                // std::cout << *client->location << std::endl;
+                std::cout << "=== location ===" << std::endl;
+                std::cout << *client->location << std::endl;
                 if (!isAllowedMethod(client->location->allowed_methods, request.getMethod())) {
                     return errorResponse(client, 405);
                 }

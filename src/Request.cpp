@@ -352,17 +352,17 @@ int Request::parseBody(Client &client)
         if (!_out.is_open()) {
             _out.open(client.inputPath.c_str(), std::ios::binary | std::ios::out | std::ios::trunc);
         }
-        std::istringstream ss(contentLength);
-        size_t length;
-        ss >> length;
-        if (maxBodySize && length > maxBodySize) {
+        if (maxBodySize && bodyLength > maxBodySize) {
+			if (_out.is_open()) {
+            	_out.close();
+        	}
             return 2;
         }
         size_t availableBodyData = client.buffer.size() - chunk.bytesRead;
         if (availableBodyData == 0) {
             return 1;
         }
-        size_t toWrite = std::min(length - _totalBodySize, availableBodyData);
+        size_t toWrite = std::min(maxBodySize - _totalBodySize, availableBodyData);
         if (toWrite > 0) {
             _out.write(client.buffer.data() + chunk.bytesRead, toWrite);
             chunk.bytesRead += toWrite;
@@ -372,13 +372,12 @@ int Request::parseBody(Client &client)
 				return 4;
 			}
         }
-        if (maxBodySize < length) {
-            return 1;
+        if (_totalBodySize >= maxBodySize) {
+			if (_out.is_open()) {
+            	_out.close();
+        	}
+            return 0;
         }
-        if (_out.is_open()) {
-            _out.close();
-        }
-        return 0;
     }
     return 1;
 }
