@@ -33,3 +33,5 @@ CGI execution (cgi_extension + cgi_pass) applies only to matching file extension
 allow_methods restricts HTTP methods; disallowed methods return 405.
 
 max_body_size limits POST/PUT payloads (uploads).
+
+curl -X POST -H "Content-Type:text/plain" --data "this is raw data" http://localhost:8030
