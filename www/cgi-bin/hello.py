@@ -13,5 +13,3 @@ name = form.getvalue("name", "Guest")
 print(f"<p>Hello, {name}!</p>")
 print("</body>")
 print("</html>")
-
-

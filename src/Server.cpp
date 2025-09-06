@@ -767,7 +767,6 @@ void Server::setResponse(Client *client)
 
 bool Server::isCGI(Client *client)
 {
-    return ((client->location->cgiPass.empty() == false ||
-         client->location->cgiBin.empty() == false ) &&
-        (getFileExtension(client->systemPath) == client->location->cgiExtension));
+    return (client->location->cgiPass.empty() != false ||
+         client->location->cgiBin.empty() != false );
 }

@@ -116,7 +116,7 @@ void Request::parseHeaders(const std::string &headerSection)
     }
 }
 
-int Request::multiform(Client &client, size_t bodyLength, size_t maxBodySize)
+int Request::multiformModule(Client &client, size_t bodyLength, size_t maxBodySize)
 {
     if (!client.location->allow_upload) {
         return 3;
@@ -287,7 +287,7 @@ int Request::parseBody(Client &client)
     size_t maxBodySize = client.location->maxBodySize;
 
     if (getHeader("Content-Type").find("multipart/form-data") != std::string::npos) {
-        return multiform(client, bodyLength, maxBodySize);
+        return multiformModule(client, bodyLength, maxBodySize);
     } else if (getHeader("Transfer-Encoding") == "chunked") {
         if (!_out.is_open()) {
             _out.open(client.inputPath.c_str(), std::ios::binary | std::ios::out | std::ios::trunc);
@@ -365,7 +365,6 @@ int Request::parseBody(Client &client)
         if (availableBodyData == 0) {
             return 1;
         }
-        size_t toWrite = std::min(maxBodySize - _totalBodySize, availableBodyData);
         size_t toWrite = std::min(maxBodySize - _totalBodySize, availableBodyData);
         if (toWrite > 0) {
             _out.write(client.buffer.data() + chunk.bytesRead, toWrite);

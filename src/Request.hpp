@@ -98,7 +98,7 @@ private:
 
     void parseRequestLine(const std::string &line);
     void parseHeaders(const std::string &headerSection);
-    int multiform(Client &client, size_t bodyLength, size_t maxBodySize);
+    int multiformModule(Client &client, size_t bodyLength, size_t maxBodySize);
 };
 
 #endif
