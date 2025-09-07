@@ -215,11 +215,12 @@ void Server::backSlashNormalize(std::string &string) {
 Config::LocationConfig *Server::getServerConfig(Client *client)
 {
     size_t maxLength = 0;
+    std::string host = client->getRequest().getHostname(); 
     Config::LocationConfig *bestLocation = NULL;
     std::string requestURI = client->getRequest().getURI();
-
+    std::cout << host << std::endl;
     for (size_t it = 0; it < this->_locations.size(); ++it) {
-		if (_locations[it]->server_fd != client->server_fd) {
+		if (_locations[it]->server_fd != client->server_fd || host != this->_locations[it]->server_name ) {
 			continue;
 		}
         std::string locationPath = this->_locations[it]->path;
@@ -356,7 +357,6 @@ void Server::handleHeaderBody(Client *client)
                     }
                 }
                 std::string uri = request.getURI();
-                // std::cout << "uri: " << uri << std::endl;
                 std::string method = request.getMethod();
                 std::string local = client->location->path;
                 client->systemPath = client->location->root;
@@ -371,7 +371,6 @@ void Server::handleHeaderBody(Client *client)
                         client->systemPath += relative;
                     }
                 }
-                //std::cout << "Path[1]: " << client->systemPath << std::endl;
                 if (this->isDirectory("./" + client->systemPath)) {
                     if (client->location->index.empty() == false) {
                         if (client->systemPath[client->systemPath.size()-1] != '/') {
@@ -379,7 +378,6 @@ void Server::handleHeaderBody(Client *client)
                         }
                         client->systemPath += client->location->index;
                     }
-                	// std::cout << "Path[2]: " << client->systemPath << std::endl;
                 }
                 if (!request.hasBody) {
                     client->state = this->setState(client);
@@ -585,11 +583,10 @@ void Server::runCGI(Client *client, const std::string &type, const std::string &
     if (pid == 0)
     {
         int in, out;
-        in = open(client->inputPath.c_str(), O_RDONLY);
+        in = open("/dev/null", O_RDONLY);
         if (client->getRequest().getMethod() == "POST") {
-        } else {
-            in = open("/dev/null", O_RDONLY);
-        };
+            in = open(client->inputPath.c_str(), O_RDONLY);
+        }
         out = open(client->outputPath.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0644);
         if (in < 0 || out < 0) {
 			perror("open tmp_file");
@@ -637,7 +634,7 @@ void Server::checkChildProcesses()
             Client *t = this->_clients[it->second];
             if (WIFEXITED(status)) {
                 int exitStatus = WEXITSTATUS(status);
-                if (exitStatus != 0) {
+                if (exitStatus != 0 && exitStatus != 1) {
                     this->errorResponse(t, 500);
                     _childProcesses.erase(it++);
                     return;
@@ -646,10 +643,6 @@ void Server::checkChildProcesses()
                 this->errorResponse(t, 500);
                 _childProcesses.erase(it++);
                 return;
-            }
-            struct stat st;
-            if (stat(t->outputPath.c_str(), &st) == 0) {
-                std::cout << "OutputFileSize: " <<  st.st_size << std::endl;
             }
             t->getResponse().sendFile = true;
             t->state = PROCESS_CGI;
@@ -767,6 +760,6 @@ void Server::setResponse(Client *client)
 
 bool Server::isCGI(Client *client)
 {
-    return (client->location->cgiPass.empty() != false ||
-         client->location->cgiBin.empty() != false );
+    return (client->location->cgiPass.empty() == false || 
+         client->location->cgiBin.empty() == false);
 }

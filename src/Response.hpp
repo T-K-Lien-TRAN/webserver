@@ -26,17 +26,14 @@ public:
     std::string _body;
     std::string output;
 
-
     Response();
     ~Response();
-
     void setStatus(int code);
     void setHeader(const std::string &key, const std::string &value);
     void setBody(const std::string &body);
     void setFileContentLength(std::string path, size_t bodyOffSet);
     void setContentType(const std::string &type);
     void setDefaultErrorBody(int code);
-
     void build();
 
 private:

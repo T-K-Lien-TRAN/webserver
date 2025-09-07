@@ -303,6 +303,8 @@ bool Config::parseFile(const std::string &filename)
                         location.autoIndex = true;
                     else if (tokens[0] == "allow_upload" && tokens[1] == "on")
                         location.allow_upload = true;
+                    else if (tokens[0] == "upload_store")
+                        location.uploadStore = tokens[1];
                     else if (tokens[0] == "max_body_size")
                         location.maxBodySize = std::atoi(tokens[1].c_str());
                     else
@@ -344,7 +346,8 @@ std::ostream& operator<<(std::ostream& os, const Config::LocationConfig& locatio
 	   << ", server_fd: " << location.server_fd
        << ", root: " << location.root
        << ", index: " << location.index
-       << ", uploadStore: " << location.allow_upload
+       << ", allow_upload: " << location.allow_upload
+       << ", upload_store: " << location.uploadStore
        << ", cgi_pass: " << location.cgiPass
        << ", cgi_bin: " << location.cgiBin
        << ", redirectCode: " << location.redirectCode

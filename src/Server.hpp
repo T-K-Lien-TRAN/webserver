@@ -34,6 +34,8 @@ class Server {
 public:
 
 	bool running;
+    std::string tmpDir;
+    
     Server();
     ~Server();
 
@@ -53,7 +55,6 @@ public:
     std::map<int, Client *> _clients;
     std::map<int, int> _childProcesses;
 
-
     int createSocket(int);
     void acceptNewConnection(int);
     void handleHeaderBody(Client *);
@@ -71,8 +72,8 @@ public:
     std::string generateAutoIndex(const std::string &dirPath, const std::string &requestPath);
     void setResponse( Client *client );
     bool isCGI(Client *client);
-	void backSlashNormalize(std::string &string);
-	void locationFallBack(Client *client);
+    void backSlashNormalize(std::string &string);
+    void locationFallBack(Client *client);
 	void extractCGIHeaders(const std::string &cgiHeader, std::string &contentType, std::string &status);
 };
 

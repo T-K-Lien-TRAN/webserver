@@ -85,7 +85,7 @@ private:
     std::string _version;
     std::string _host;
     std::string _body;
-    size_t _totalBodySize;
+    size_t _writedToDisk;
 
     size_t _chunkSizeToWrite;
     size_t _totalBytesRead;

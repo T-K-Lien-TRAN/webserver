@@ -42,6 +42,7 @@ public:
 		std::string root;
 		std::string index;
 		bool allow_upload;
+        std::string uploadStore;
 		std::string cgiExtension;
 		std::string cgiPass;
 		std::string cgiBin;

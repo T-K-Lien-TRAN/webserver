@@ -26,7 +26,7 @@ Request::Request():
     byteEnd(0),
     _bodyEndIndex(0),
     hasBody(false),
-    _totalBodySize(0),
+    _writedToDisk(0),
     _chunkSizeToWrite(0),
     _totalBytesRead(0) {}
 
@@ -37,7 +37,7 @@ Request &Request::operator=(const Request &other)
         byteEnd = other.byteEnd;
         _bodyEndIndex = other._bodyEndIndex;
         hasBody = other.hasBody;
-        _totalBodySize = other._totalBodySize;
+        _writedToDisk = other._writedToDisk;
         _chunkSizeToWrite = other._chunkSizeToWrite;
         _totalBytesRead = other._totalBytesRead;
     }
@@ -139,7 +139,7 @@ int Request::multiformModule(Client &client, size_t bodyLength, size_t maxBodySi
             }
             size_t index = std::distance(client.buffer.begin() + byteStart, it) + file.size();
             byteStart += index;
-            _totalBodySize += index;
+            _writedToDisk += index;
             this->_multipart.hasFileHeader = true;
             this->_multipart.file.clear();
         }
@@ -154,7 +154,7 @@ int Request::multiformModule(Client &client, size_t bodyLength, size_t maxBodySi
                     std::distance(client.buffer.begin() + byteStart, endIt));
             size_t index = std::distance(client.buffer.begin() + byteStart, endIt) + 1;
             byteStart += index;
-            _totalBodySize += index;
+            _writedToDisk += index;
             std::string filepath = client.location->root + "/" + this->_multipart.file;
             this->_out.open(filepath.c_str(), std::ios::binary | std::ios::out | std::ios::trunc);
             this->_multipart.hasFilepath = true;
@@ -168,7 +168,7 @@ int Request::multiformModule(Client &client, size_t bodyLength, size_t maxBodySi
             }
             size_t index = std::distance(client.buffer.begin() + byteStart, it) + delimiter.size();
             byteStart += index;
-            _totalBodySize += index;
+            _writedToDisk += index;
             this->_multipart.data = true;
         }
         // --- Write file data until boundary ---
@@ -194,30 +194,30 @@ int Request::multiformModule(Client &client, size_t bodyLength, size_t maxBodySi
         size_t lookahead = baseBoundary.size() + 4;
         size_t safeWrite = 0;
         size_t available = byteEnd - byteStart;
-        bool lastChunk = (_totalBodySize + available >= bodyLength);
+        bool lastChunk = (_writedToDisk + available >= bodyLength);
         if (hasBoundary) {
             safeWrite = std::distance(client.buffer.begin() + byteStart, it);
         } else if (available > lookahead) {
             safeWrite = available - lookahead;
         } else if (lastChunk) {
-            safeWrite = bodyLength - _totalBodySize;
+            safeWrite = bodyLength - _writedToDisk;
         } else {
             return 1;
         }
         if (_out.is_open() && safeWrite > 0) {
             _out.write(client.buffer.data() + byteStart, safeWrite);
-            _totalBodySize += safeWrite;
+            _writedToDisk += safeWrite;
             byteStart += safeWrite;
 			if (_out.fail()) {
 				_out.close();
 				return 4;
 			}
-            if (maxBodySize && _totalBodySize > maxBodySize) {
+            if (maxBodySize && _writedToDisk > maxBodySize) {
                 return 2;
             }
             if (hasMiddleBoundary) {
                 byteStart += middleBoundary.size();
-                _totalBodySize += middleBoundary.size();
+                _writedToDisk += middleBoundary.size();
                 if (_out.is_open()) {
                     _out.close();
                 }
@@ -232,7 +232,7 @@ int Request::multiformModule(Client &client, size_t bodyLength, size_t maxBodySi
                 }
                 return 0;
             }
-            if (_totalBodySize >= bodyLength) {
+            if (_writedToDisk >= bodyLength) {
                 std::cout << "Finished: " << std::endl;
                 if (_out.is_open()) {
                     _out.close();
@@ -249,9 +249,9 @@ void Request::setCGIEnvironment(Client *client) const
     std::string uri = client->getRequest().getURI();
     std::string path = "/" + client->location->root + uri;
 	std::string query = client->getRequest().getQuery();
-
 	setenv("QUERY_STRING",query.c_str() , 1);
     setenv("REQUEST_METHOD", getMethod().c_str(), 1);
+    setenv("UPLOAD_STORE", client->location->uploadStore.c_str(), 1);
     setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
     setenv("SCRIPT_NAME", "", 1);
     setenv("PATH_INFO", path.c_str(), 1);
@@ -286,9 +286,13 @@ int Request::parseBody(Client &client)
     size_t bodyLength = std::strtoul(contentLength.c_str(), NULL, 10);
     size_t maxBodySize = client.location->maxBodySize;
 
-    if (getHeader("Content-Type").find("multipart/form-data") != std::string::npos) {
+    /* if (getHeader("Content-Type").find("multipart/form-data") != std::string::npos) {
         return multiformModule(client, bodyLength, maxBodySize);
-    } else if (getHeader("Transfer-Encoding") == "chunked") {
+    } else  */
+    if (bodyLength > maxBodySize) {
+        return 2;
+    }
+    if (getHeader("Transfer-Encoding") == "chunked") {
         if (!_out.is_open()) {
             _out.open(client.inputPath.c_str(), std::ios::binary | std::ios::out | std::ios::trunc);
         }
@@ -328,13 +332,13 @@ int Request::parseBody(Client &client)
                 _out.write(client.buffer.data() + byteStart, toWrite);
                 byteStart += toWrite;
                 chunk.bytesRead += toWrite;
-                _totalBodySize += toWrite;
+                _writedToDisk += toWrite;
 				if (_out.fail()) {
 					_out.close();
 					return 4;
 				}
             }
-            if (maxBodySize && this->_totalBodySize > maxBodySize) {
+            if (maxBodySize && this->_writedToDisk > maxBodySize) {
                 if (_out.is_open()) {
                     _out.close();
                 }
@@ -351,31 +355,36 @@ int Request::parseBody(Client &client)
             chunk.bytesRead = 0;
             chunk.hex.clear();
         }
-    } else if (!contentLength.empty()) {
+    } else if (contentLength.empty() == false) {
         if (!_out.is_open()) {
             _out.open(client.inputPath.c_str(), std::ios::binary | std::ios::out | std::ios::trunc);
         }
-        if (maxBodySize && _totalBodySize > maxBodySize) {
+        if (maxBodySize && _writedToDisk > maxBodySize) {
             if (_out.is_open()) {
                 _out.close();
             }
             return 2;
         }
-        size_t availableBodyData = client.buffer.size() - chunk.bytesRead;
-        if (availableBodyData == 0) {
+        size_t toWrite = byteEnd - byteStart;
+        if (toWrite <= 0) {
             return 1;
         }
-        size_t toWrite = std::min(maxBodySize - _totalBodySize, availableBodyData);
-        if (toWrite > 0) {
-            _out.write(client.buffer.data() + chunk.bytesRead, toWrite);
-            chunk.bytesRead += toWrite;
-            _totalBodySize += toWrite;
-			if (_out.fail()) {
-				_out.close();
-				return 4;
-			}
+        if (maxBodySize && _writedToDisk + toWrite > maxBodySize) {
+            toWrite = maxBodySize - _writedToDisk;
         }
-        if (_totalBodySize >= maxBodySize) {
+        if (toWrite > 0 && _out.is_open())
+        {
+            _out.write(client.buffer.data() + byteStart, toWrite);
+            byteStart += toWrite;
+            _writedToDisk += toWrite;
+            std::cout << "\rWrited:" << _writedToDisk << std::flush;
+            if (_out.fail()) {
+                _out.close();
+                return 4;
+            }
+        }
+        if (_writedToDisk >= bodyLength) {
+            std::cout << "Body writed." << std::endl;
             return 0;
         }
     }

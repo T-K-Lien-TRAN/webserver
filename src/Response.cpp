@@ -86,19 +86,14 @@ void Response::build() {
     std::ostringstream response;
 
     response << "HTTP/1.1 " << _statusCode << " " << _statusMessage << "\r\n";
-
     std::map<std::string, std::string>::const_iterator it = _headers.begin();
     for (; it != _headers.end(); ++it) {
         response << it->first << ": " << it->second << "\r\n";
     }
-
     response << "\r\n";
-
     headerByteSize = response.str().size();
     //std::cout << "HeaderByteSize: " <<  headerByteSize << std::endl;
-
     response << _body;
-
     output = response.str();
     _outputLength += output.size();
     //std::cout << "OutputLength: " <<  _outputLength << std::endl;
