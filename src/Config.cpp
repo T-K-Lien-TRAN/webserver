@@ -113,7 +113,6 @@ std::string trim(const std::string &line)
 void Config::validate(const LocationConfig &config) const
 {
     if (config.port <= 0 || config.port > 65535) {
-		std::cout << "Port:" << config.port << std::endl;
         throw std::runtime_error("Error: listen directive.");
 	}
     if (trim(config.root).empty() && trim(config.serverRoot).empty())
@@ -173,7 +172,6 @@ std::vector<std::string> tokenize(const std::string &line)
 void getMethods(std::vector<std::string> &tokens, Config::LocationConfig &t)
 {
     for (size_t it = 1; it < tokens.size(); ++it) {
-		std::cout << tokens[it] << std::endl;
         t.allowed_methods.push_back(tokens[it]);
 	}
 }
@@ -284,7 +282,6 @@ bool Config::parseFile(const std::string &filename)
             {
                 if (tokens.size() >= 2)
                 {
-					std::cout << tokens[0] << std::endl;
                     if (tokens[0] == "location")
                         location.path = tokens[1];
                     else if (tokens[0] == "root")

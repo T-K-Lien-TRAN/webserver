@@ -36,18 +36,6 @@ void Server::handleClientWrite(Client *client)
     size_t CHUNK_SIZE = BUFFER_SIZE;
     ssize_t byteSend = 0;
     size_t toSend;
-    // if (res._indexByteSend == 0) {
-    //     std::cout << "[Client# " << client->getId() << "]" << std::endl;
-    //     std::cout << "res.headerByteSize: " << res.headerByteSize << std::endl;
-    //     std::cout << "res._indexByteSend: " << res._indexByteSend << std::endl;
-    //     std::cout << "res._outputLength: " << res._outputLength << std::endl;
-    //     std::cout << "byteSend: " << byteSend << std::endl;
-    //     std::cout << "res.sendFile: " << res.sendFile << std::endl;
-    //     size_t preview_size = 200;
-    //     std::cout << "=====response=====" << std::endl;
-    //     std::cout << res.output.substr(0, std::min(preview_size, res.output.size())) << std::endl;
-    //     std::cout << "=================" << std::endl;
-    // }
     if (res.headerByteSize > res._indexByteSend) {
         toSend = std::min(CHUNK_SIZE, res.headerByteSize  - res._indexByteSend);
         byteSend = send(
@@ -218,7 +206,6 @@ Config::LocationConfig *Server::getServerConfig(Client *client)
     std::string host = client->getRequest().getHostname(); 
     Config::LocationConfig *bestLocation = NULL;
     std::string requestURI = client->getRequest().getURI();
-    std::cout << host << std::endl;
     for (size_t it = 0; it < this->_locations.size(); ++it) {
 		if (_locations[it]->server_fd != client->server_fd || host != this->_locations[it]->server_name ) {
 			continue;
@@ -340,12 +327,9 @@ void Server::handleHeaderBody(Client *client)
         client->receive();
     }
     if (client->state == HEADER) {
-		//  std::cout << "HEADER" << std::endl;
         if (client->parseHeader() && !client->location) {
             client->location = this->getServerConfig(client);
             if (client->location) {
-                std::cout << "=== location ===" << std::endl;
-                std::cout << *client->location << std::endl;
                 if (!isAllowedMethod(client->location->allowed_methods, request.getMethod())) {
                     return errorResponse(client, 405);
                 }
@@ -371,6 +355,7 @@ void Server::handleHeaderBody(Client *client)
                         client->systemPath += relative;
                     }
                 }
+                std::cout << "Path#1: " << client->systemPath << std::endl;
                 if (this->isDirectory("./" + client->systemPath)) {
                     if (client->location->index.empty() == false) {
                         if (client->systemPath[client->systemPath.size()-1] != '/') {
@@ -379,18 +364,18 @@ void Server::handleHeaderBody(Client *client)
                         client->systemPath += client->location->index;
                     }
                 }
+                
                 if (!request.hasBody) {
                     client->state = this->setState(client);
                 }
                 if (request.hasBody) {
-                    std::cout << "BODY" << std::endl;
                     client->state = BODY;
                 }
-
             } else {
 				locationFallBack(client);
                 return errorResponse(client, 404);
             }
+            std::cout << "Path#2: " << client->systemPath << std::endl;
         }
     }
 
@@ -464,7 +449,6 @@ void Server::handleRequest(Client * client)
     std::string uri = request.getURI();
 
     if (client->state == SET_CGI) {
-        std::cout << "SET_CGI" << std::endl;
         std::string execute;
         std::string type;
         if (client->location->cgiBin != "") {
@@ -480,7 +464,6 @@ void Server::handleRequest(Client * client)
 
     if (client->state == PROCESS_CGI)
     {
-        std::cout << "PROCESS_CGI" << std::endl;
         struct stat st;
         int fd = open(client->outputPath.c_str(), O_RDONLY);
         if (fstat(fd, &st) == -1 || st.st_size == 0) {
@@ -525,7 +508,7 @@ void Server::handleRequest(Client * client)
     }
 
     if (client->state == GET) {
-		std::cout << "GET: " << client->systemPath << std::endl;
+        std::cout << "GET" << std::endl;
 		if (client->location->autoIndex) {
 			std::string indexFile = client->location->index;
 			if (!indexFile.empty() && client->systemPath.size() >= indexFile.size()) {
@@ -554,7 +537,6 @@ void Server::handleRequest(Client * client)
 
     if (client->state == DELETE)
     {
-        std::cout << "DELETE" << std::endl;
         std::string path = client->systemPath;
         if (remove(path.c_str()) == 0) {
             response.setStatus(200);
@@ -661,13 +643,9 @@ void Server::checkChildProcesses()
 bool Server::disconnect(Client &client)
 {
     if (client.state == COMPLETED) {
-        char buffer[1];
-        int result = recv(client.client_fd, buffer, 1, 0);
-        if (result <= 0) {
-            close(client.client_fd);
-            this->removeClientByFd(client.client_fd);
-            return true;
-        }
+        close(client.client_fd);
+        this->removeClientByFd(client.client_fd);
+        return true;
     }
     return false;
 }

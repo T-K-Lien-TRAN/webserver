@@ -52,29 +52,13 @@ void Response::setFileContentLength(std::string path, size_t bodyOffSet)
         std::ostringstream oss;
         oss << st.st_size - bodyOffSet;
         _headers["Content-Length"] = oss.str();
-        // std::cout << "bodyOffSet: " << bodyOffSet << std::endl;
-        // std::cout << "st.st_size: " << st.st_size << std::endl;
         _outputLength = st.st_size - bodyOffSet;
     }
 }
 
 void Response::setDefaultErrorBody(int code) {
-    // std::ostringstream path;
-    // path << "www/error_pages/" << code << ".html";
-
-    // int fd = open(path.str().c_str(), O_RDONLY);
-    // std::string body;
-
-    // if (fd != -1) {
-    //     char buffer[1024];
-    //     ssize_t bytesRead;
-    //     while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0) {
-    //         body.append(buffer, bytesRead);
-    //     }
-    //     close(fd);
-    // }
-
 	std::ostringstream ss;
+
 	ss << "<html><body><h1>" << code << " " << getStatusMessage(code) << "</h1></body></html>";
 	std::string body = ss.str();
     setBody(body);
@@ -92,11 +76,9 @@ void Response::build() {
     }
     response << "\r\n";
     headerByteSize = response.str().size();
-    //std::cout << "HeaderByteSize: " <<  headerByteSize << std::endl;
     response << _body;
     output = response.str();
     _outputLength += output.size();
-    //std::cout << "OutputLength: " <<  _outputLength << std::endl;
 }
 
 std::string Response::getStatusMessage(int code) const {

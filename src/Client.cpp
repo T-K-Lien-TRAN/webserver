@@ -89,7 +89,6 @@ int Client::parseBody()
 void Client::receive()
 {
     size_t leftover = 0;
-    //size_t leftover = _request.byteEnd - _request.byteStart;
     if (_request.byteEnd >= _request.byteStart) {
         leftover = _request.byteEnd - _request.byteStart;
         if (leftover > 0) {
@@ -105,7 +104,7 @@ void Client::receive()
     ssize_t bytesReader = recv(client_fd, buffer.data() + _request.byteEnd, hasSpace, 0);
     if (bytesReader == 0) {
         this->state = COMPLETED;
-        return;
+        return ;
     }
     if (bytesReader < 0) {
         perror("recv");

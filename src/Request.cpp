@@ -233,7 +233,6 @@ int Request::multiformModule(Client &client, size_t bodyLength, size_t maxBodySi
                 return 0;
             }
             if (_writedToDisk >= bodyLength) {
-                std::cout << "Finished: " << std::endl;
                 if (_out.is_open()) {
                     _out.close();
                 }
@@ -318,7 +317,6 @@ int Request::parseBody(Client &client)
                 if (_out.is_open()) {
                     _out.close();
                 }
-				std::cout << "Finished: " << std::endl;
                 return 0;
             }
             size_t available = byteEnd - byteStart;
@@ -377,14 +375,12 @@ int Request::parseBody(Client &client)
             _out.write(client.buffer.data() + byteStart, toWrite);
             byteStart += toWrite;
             _writedToDisk += toWrite;
-            std::cout << "\rWrited:" << _writedToDisk << std::flush;
             if (_out.fail()) {
                 _out.close();
                 return 4;
             }
         }
         if (_writedToDisk >= bodyLength) {
-            std::cout << "Body writed." << std::endl;
             return 0;
         }
     }
