@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include <cstring>
+#include <unistd.h>
 
 
 typedef std::vector<char>::iterator bufferIt;
@@ -75,6 +76,12 @@ void CREATED_201(std::string error){
 }
 
 void METHOD_NOT_ALLOWED_405(std::string error){
+    std::cout << "HTTP/1.1 405 Method Not Allowed\r\n";
+    std::cout << "Content-Type: text/html\r\n\r\n";
+    std::cout << "<p>" << error << "<p>";
+}
+
+void FORBIDDEN_403(std::string error){
     std::cout << "HTTP/1.1 405 Method Not Allowed\r\n";
     std::cout << "Content-Type: text/html\r\n\r\n";
     std::cout << "<p>" << error << "<p>";
@@ -152,8 +159,11 @@ int main()
             std::string filepath = savePath + "/" + state.file;
             out.open(filepath.c_str(), std::ios::binary | std::ios::out | std::ios::trunc);
             if (out.is_open() == false) {
-                BAD_REQUEST_400("OPEN: " + filepath);
-                return 1;
+                if (access(filepath.c_str(), R_OK) == -1) {
+                    FORBIDDEN_403("forbidden");
+                    return 1;
+                }
+                return 2;
             }
             state.hasFilepath = true;
         }

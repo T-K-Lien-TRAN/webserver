@@ -31,7 +31,8 @@ enum ClientState
     METHOD,
     SET_RESPONSE,
     PROCESS_RESPONSE,
-    COMPLETED
+    COMPLETED,
+    DISCONNECT
 };
 
 struct CgiResult {

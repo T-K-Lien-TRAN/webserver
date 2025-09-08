@@ -24,9 +24,9 @@ int Client::_counter = 0;
 
 Client::Client(void) :
     buffer( 1024 * 16 ),
-    client_fd(-1),
-    server_fd(-1),
-	write_fd(-1),
+    client_fd(0),
+    server_fd(0),
+	write_fd(0),
     location(NULL)
 {
 }
@@ -35,7 +35,7 @@ Client::Client(int client_fd, int server_fd) :
     buffer( 1024 * 16 ),
     client_fd(client_fd),
     server_fd(server_fd),
-	write_fd(-1),
+	write_fd(0),
     bodyOffSet(0),
     location(NULL),
     state(HEADER)
@@ -103,12 +103,12 @@ void Client::receive()
     }
     ssize_t bytesReader = recv(client_fd, buffer.data() + _request.byteEnd, hasSpace, 0);
     if (bytesReader == 0) {
-        this->state = COMPLETED;
+        this->state = DISCONNECT;
         return ;
     }
     if (bytesReader < 0) {
         perror("recv");
-		this->state = COMPLETED;
+		this->state = DISCONNECT;
         return;
     }
     _request.byteEnd += bytesReader;

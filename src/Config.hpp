@@ -41,7 +41,7 @@ public:
 		std::string path;
 		std::string root;
 		std::string index;
-		bool allow_upload;
+		bool allowUpload;
         std::string uploadStore;
 		std::string cgiExtension;
 		std::string cgiPass;
@@ -53,7 +53,7 @@ public:
 		LocationConfig() : port(0),
 						server_fd(0),
 						fallbackErrorPages(&emptyErrorMap),
-						allow_upload( false ),
+						allowUpload( false ),
 						autoIndex(false),
 						maxBodySize(0),
 						allowed_methods() {}
