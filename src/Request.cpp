@@ -120,18 +120,28 @@ void Request::setCGIEnvironment(Client *client) const
 {
     Request &request = client->getRequest();
 
-	setenv("QUERY_STRING",request.getQuery().c_str() , 1);
+    // Basic CGI environment variables
+    setenv("QUERY_STRING", request.getQuery().c_str(), 1);
     setenv("REQUEST_METHOD", request.getMethod().c_str(), 1);
-    if (client->location->allowUpload) {
-        setenv("UPLOAD_STORE", client->location->uploadStore.c_str(), 1);
-    }
     setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
     setenv("SCRIPT_NAME", "", 1);
-    setenv("PATH_INFO", client->systemPath.c_str(), 1);
-    setenv("CONTENT_LENGTH", request.getHeader("Content-Length").c_str(), 1);
-    
-    setenv("CONTENT_TYPE", request.getHeader("Content-Type").c_str(), 1);;
-    
+
+	std::string contentLength = request.getHeader("Content-Length");
+    std::string contentType = request.getHeader("Content-Type");
+
+	setenv("PATH_INFO", request.getURI().c_str(), 1);
+	if (!contentLength.empty()) {
+        setenv("CONTENT_LENGTH", contentLength.c_str(), 1);
+    }
+    if (!contentType.empty()) {
+        setenv("CONTENT_TYPE", contentType.c_str(), 1);
+    }
+
+    // Upload-specific environment
+    if (client->location->allowUpload && !client->location->uploadStore.empty()) {
+        setenv("UPLOAD_STORE", client->location->uploadStore.c_str(), 1);
+    }
+
     for (mapStringit it = _headers.begin(); it != _headers.end(); ++it)
     {
         std::string key = it->first;

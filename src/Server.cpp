@@ -12,6 +12,7 @@
 
 #include "Server.hpp"
 #include "webserv.hpp"
+#include "Request.hpp"
 #include <iostream>
 #include <sstream>
 #include <cstring>
@@ -216,7 +217,7 @@ bool getRegexMatch(std::string path, std::string fileExtension) {
 Config::LocationConfig *Server::getServerConfig(Client *client)
 {
     size_t maxLength = 0;
-    std::string host = client->getRequest().getHostname(); 
+    std::string host = client->getRequest().getHostname();
     Config::LocationConfig *bestLocation = NULL;
     std::string requestURI = client->getRequest().getURI();
     std::string regex;
@@ -365,11 +366,11 @@ void Server::handleHeaderBody(Client *client)
                         if (!relative.empty()) {
                             if (client->systemPath[client->systemPath.size()-1] != '/' && relative[0] != '/') {
                                 client->systemPath += '/';
-                            } 
+                            }
                             client->systemPath += relative;
                         }
                     }
-            
+
                 std::cout << "Path#1: " << client->systemPath << std::endl;
                 if (this->isDirectory("./" + client->systemPath)) {
                     if (client->location->index.empty() == false) {
@@ -515,7 +516,7 @@ void Server::handleRequest(Client * client)
 			};
 			response.setHeader("Content-Type", contentType);
 			if (status.empty() == false) {
-				response.setHeader("Status", contentType);
+				response.setHeader("Status", status);
 			}
         }
         client->state = SET_RESPONSE;
@@ -703,7 +704,7 @@ void Server::errorResponse(Client *client, int code)
 			return setResponse(client);
 		}
 	}
-	
+
 	res.setDefaultErrorBody(code);
     return setResponse(client);
 }
@@ -772,6 +773,6 @@ bool Server::isCGI(Client *client)
     bool isExtension = getFileExtension(client->systemPath) == client->location->cgiExtension;
     bool isUpload = client->location->allowUpload;
     bool hasCGIPass = client->location->cgiPass.empty() == false;
-    bool hasCGIBin =  client->location->cgiBin.empty() == false;  
+    bool hasCGIBin =  client->location->cgiBin.empty() == false;
     return (hasCGIBin || hasCGIPass) && (isExtension || isUpload);
 }
