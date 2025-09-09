@@ -35,7 +35,7 @@ public:
 
 	bool running;
     std::string tmpDir;
-    
+
     Server();
     ~Server();
 
@@ -69,7 +69,7 @@ public:
     void errorResponse( Client*, int );
     enum ClientState setState(Client *client);
     std::string getFileExtension(const std::string &uri);
-    std::string generateAutoIndex(const std::string &dirPath, const std::string &requestPath);
+    std::string generateAutoIndex(const std::string &dirPath, std::string &requestPath);
     void setResponse( Client *client );
     bool isCGI(Client *client);
     void backSlashNormalize(std::string &string);

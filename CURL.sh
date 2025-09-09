@@ -38,5 +38,7 @@ curl -X DELETE -v http://localhost:8080/methods/somefile.txt
 curl -X POST -v http://localhost:8080/methods/
 curl -X GET -v http://localhost:8080/methods/
 
-curl -X POST -v --data"Welcome to webserv uplod root" http://localhost:8080/uploads/hello.txt
-curl -X POST -v --data-binary "@dog-photo.jpg" http://localhost:8080/uploads/dog-photo.jpg
+curl -v -F "file=@dog-photo.jpg" http://localhost:8080/uploads/
+curl -X DELETE -v http://localhost:8080/uploads/dog-photo.jpg
+
+curl -X UNKNOWN -v http://localhost:8080/

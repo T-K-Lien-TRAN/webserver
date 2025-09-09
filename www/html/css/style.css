@@ -5,6 +5,10 @@ body {
 }
 
 h1 {
-    color: red;
+    color: blue;
 }
 
+div {
+	padding: 20px;
+	border: 1px black;
+}

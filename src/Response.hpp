@@ -11,37 +11,39 @@
 /* ************************************************************************** */
 
 #ifndef RESPONSE_HPP
-#define RESPONSE_HPP
+# define RESPONSE_HPP
 
-#include <string>
-#include <map>
+# include <map>
+# include <string>
 
-class Response {
-public:
-    bool sendFile;
-    size_t headerByteSize;
-    size_t bodyByteIndex;
-    size_t _outputLength;
-    size_t _indexByteSend;
-    std::string _body;
-    std::string output;
+class Response
+{
+  public:
+	bool sendFile;
+	size_t headerByteSize;
+	size_t bodyByteIndex;
+	size_t _outputLength;
+	size_t _indexByteSend;
+	std::string _body;
+	std::string output;
 
-    Response();
-    ~Response();
-    void setStatus(int code);
-    void setHeader(const std::string &key, const std::string &value);
-    void setBody(const std::string &body);
-    void setFileContentLength(std::string path, size_t bodyOffSet);
-    void setContentType(const std::string &type);
-    void setDefaultErrorBody(int code);
-    void build();
+	Response();
+	~Response();
+	void setStatus(int code);
+	void setHeader(const std::string &key, const std::string &value);
+	void setBody(const std::string &body);
+	void setFileContentLength(std::string path, size_t bodyOffSet);
+	void setContentType(const std::string &type);
+	void setDefaultErrorBody(int code);
+	std::string getMimeType(const std::string &extension);
+	void build();
 
-private:
-    int _statusCode;
-    std::string _statusMessage;
-    std::map<std::string, std::string> _headers;
+  private:
+	int _statusCode;
+	std::string _statusMessage;
+	std::map<std::string, std::string> _headers;
 
-    std::string getStatusMessage(int code) const;
+	std::string getStatusMessage(int code) const;
 };
 
 #endif

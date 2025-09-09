@@ -52,7 +52,7 @@ void Server::handleClientWrite(Client *client)
             toSend,
             0);
     } else {
-        if (client->write_fd == -1) {
+        if (client->write_fd == 0) {
             client->write_fd = open(client->outputPath.c_str(), O_RDONLY);
             res.bodyByteIndex = 0;
             if (client->write_fd == -1) {
@@ -61,6 +61,7 @@ void Server::handleClientWrite(Client *client)
             }
         }
         size_t offset = client->bodyOffSet + res.bodyByteIndex;
+		std::cout << "offset" << offset << std::endl;
         ssize_t bytesReader = pread(client->write_fd, client->buffer.data(), client->buffer.size(), offset);
         if (bytesReader <= 0) {
 			client->state = COMPLETED;
@@ -188,8 +189,13 @@ bool Server::removeClientByFd(const int client_fd)
         return false;
     }
     Client *client = it->second;
-    ::remove(client->inputPath.c_str() );
-    ::remove(client->outputPath.c_str());
+    ::remove(client->inputPath.c_str());
+	std::ostringstream oss;
+    oss << "/tmp/cgi_output_" << client->getId();
+	std::string tmpFile = oss.str();
+	if (client->outputPath == tmpFile) {
+		::remove(client->outputPath.c_str());
+	}
     this->_clients.erase(it);
     delete client;
 	client = NULL;
@@ -222,7 +228,8 @@ Config::LocationConfig *Server::getServerConfig(Client *client)
     std::string requestURI = client->getRequest().getURI();
     std::string regex;
     for (size_t it = 0; it < this->_locations.size(); ++it) {
-		if (_locations[it]->server_fd != client->server_fd || host != this->_locations[it]->server_name ) {
+		if (_locations[it]->server_fd != client->server_fd ||
+				host != this->_locations[it]->server_name ) {
 			continue;
 		}
         std::string locationPath = this->_locations[it]->path;
@@ -410,13 +417,14 @@ void Server::handleHeaderBody(Client *client)
 void Server::fileToOutput(Client *client, int code, std::string path) {
 	Response &res = client->getResponse();
 	std::ifstream file(path.c_str());
-	if (file.is_open()) {
-		std::ostringstream ss;
-		ss << file.rdbuf();
-		res.setStatus(code);
-		res.setContentType("text/html");
-		res.setBody(ss.str());
-	}
+	std::string ext = getFileExtension(path);
+	std::string mimeType = res.getMimeType(ext);
+	res.sendFile = true;
+	client->outputPath = path;
+	res.setStatus(code);
+	res.setContentType(mimeType);
+	res.setFileContentLength(path, 0);
+	client->bodyOffSet = 0;
 }
 
 std::string Server::trim(const std::string &s) const
@@ -525,7 +533,8 @@ void Server::handleRequest(Client * client)
 
     if (client->state == GET) {
         std::cout << "GET" << std::endl;
-		if (client->location->autoIndex) {
+		bool hasFile = isFile(client->systemPath);
+		if (client->location->autoIndex && !hasFile) {
 			std::string indexFile = client->location->index;
 			if (!indexFile.empty() && client->systemPath.size() >= indexFile.size()) {
 				client->systemPath.erase(
@@ -540,7 +549,7 @@ void Server::handleRequest(Client * client)
 			client->getResponse().setBody(html);
 			return this->setResponse(client);
 		}
-		if (isFile(client->systemPath)) {
+		if (hasFile) {
             if (access(client->systemPath.c_str(), R_OK) == -1) {
                 return errorResponse(client, 403);
             }
@@ -734,7 +743,7 @@ std::string Server::getFileExtension(const std::string &uri)
     return "NOT FOUND";
 }
 
-std::string Server::generateAutoIndex(const std::string &dirPath, const std::string &requestPath)
+std::string Server::generateAutoIndex(const std::string &dirPath, std::string &requestPath)
 {
     DIR *dir = opendir(dirPath.c_str());
     if (!dir) {
@@ -743,6 +752,9 @@ std::string Server::generateAutoIndex(const std::string &dirPath, const std::str
     std::ostringstream html;
     html << "<html><head><title>Index of " << requestPath << "</title></head><body>";
     html << "<h1>Index of " << requestPath << "</h1><hr><pre>";
+	if (!requestPath.empty() && requestPath[requestPath.size() - 1] != '/') {
+		requestPath += "/";
+	}
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         std::string name = entry->d_name;

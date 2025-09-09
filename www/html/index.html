@@ -14,10 +14,13 @@
 	<input type="text" id="myInput" size="10" />
 	<button onclick="showMessage()">Click me!</button>
 	<div>
-		<input type="file" id="fileInput" />
-		<button onclick="sendFile()">Send File</button>
+		<form action="/uploads" method="POST" enctype="multipart/form-data">
+			<input type="file" name="file" required />
+			<button type="submit">Send File</button>
+		</form>
+		<a href="uploads/">uploads folder</a>
+		<a href="about/">about page</a>
 	</div>
 	<script src="js/main.js"></script>
 </body>
-
 </html>

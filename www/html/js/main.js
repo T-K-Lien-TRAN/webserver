@@ -7,19 +7,3 @@ function showMessage() {
 		document.body.appendChild(p);
 	}
 }
-
-function sendFile() {
-	const fileInput = document.getElementById('fileInput');
-	if (!fileInput.files[0]) {
-		return;
-	}
-
-	const file = fileInput.files[0];
-
-	fetch(`http://localhost/upload?filename=${encodeURIComponent(file.name)}`, {
-		method: 'POST',
-		body: file
-	})
-		.then(response => response.text())
-		.then(data => console.log(data));
-}

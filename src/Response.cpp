@@ -17,7 +17,14 @@
 #include <iostream>
 #include <sys/stat.h>
 
-Response::Response() : sendFile(false), _outputLength(0), _indexByteSend(0), _statusCode(200), _statusMessage("OK") {
+Response::Response() :
+	sendFile(false),
+	headerByteSize(0),
+	bodyByteIndex(0),
+	_outputLength(0),
+	_indexByteSend(0),
+	_statusCode(200),
+	_statusMessage("OK") {
     _headers["Server"] = "42Webserv";
     _headers["Connection"] = "close";
 }
@@ -35,6 +42,12 @@ void Response::setHeader(const std::string &key, const std::string &value) {
 
 void Response::setContentType(const std::string &type) {
     setHeader("Content-Type", type);
+}
+
+std::string to_string(int value) {
+    std::ostringstream oss;
+    oss << value;
+    return oss.str();
 }
 
 void Response::setBody(const std::string &body) {
@@ -64,6 +77,36 @@ void Response::setDefaultErrorBody(int code) {
     setBody(body);
     setContentType("text/html");
     setStatus(code);
+}
+
+std::string Response::getMimeType(const std::string& extension) {
+    static std::map<std::string, std::string> mimeTypes;
+    if (mimeTypes.empty()) {
+        mimeTypes[".html"] = "text/html";
+        mimeTypes[".htm"]  = "text/html";
+        mimeTypes[".css"]  = "text/css";
+        mimeTypes[".js"]   = "application/javascript";
+        mimeTypes[".json"] = "application/json";
+        mimeTypes[".png"]  = "image/png";
+        mimeTypes[".jpg"]  = "image/jpeg";
+        mimeTypes[".jpeg"] = "image/jpeg";
+        mimeTypes[".gif"]  = "image/gif";
+        mimeTypes[".svg"]  = "image/svg+xml";
+        mimeTypes[".ico"]  = "image/x-icon";
+        mimeTypes[".wav"]  = "audio/wav";
+        mimeTypes[".mp3"]  = "audio/mpeg";
+        mimeTypes[".pdf"]  = "application/pdf";
+        mimeTypes[".zip"]  = "application/zip";
+        mimeTypes[".txt"]  = "text/plain";
+    }
+
+    std::map<std::string, std::string>::const_iterator it = mimeTypes.find(extension);
+    if (it != mimeTypes.end()) {
+        return it->second;
+    }
+
+    // Default fallback
+    return "application/octet-stream";
 }
 
 void Response::build() {
