@@ -424,6 +424,7 @@ void Server::fileToOutput(Client *client, int code, std::string path) {
 	res.setStatus(code);
 	res.setContentType(mimeType);
 	res.setFileContentLength(path, 0);
+	res.setHeader("Connection", "close");
 	client->bodyOffSet = 0;
 }
 
