@@ -42,3 +42,7 @@ curl -v -F "file=@dog-photo.jpg" http://localhost:8080/uploads/
 curl -X DELETE -v http://localhost:8080/uploads/dog-photo.jpg
 
 curl -X UNKNOWN -v http://localhost:8080/
+
+
+#SIEGE
+docker run --rm yokogawa/siege -b -c10 -t30s http://localhost:8080/

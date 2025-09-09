@@ -61,7 +61,6 @@ void Server::handleClientWrite(Client *client)
             }
         }
         size_t offset = client->bodyOffSet + res.bodyByteIndex;
-		std::cout << "offset" << offset << std::endl;
         ssize_t bytesReader = pread(client->write_fd, client->buffer.data(), client->buffer.size(), offset);
         if (bytesReader <= 0) {
 			client->state = COMPLETED;
@@ -352,7 +351,6 @@ void Server::handleHeaderBody(Client *client)
         if (client->parseHeader() && !client->location) {
             client->location = this->getServerConfig(client);
             if (client->location) {
-                std::cout << *client->location << std::endl;
                 if (!isAllowedMethod(client->location->allowed_methods, request.getMethod())) {
                     return errorResponse(client, 405);
                 }
@@ -364,9 +362,7 @@ void Server::handleHeaderBody(Client *client)
                     }
                 }
                 std::string uri = request.getURI();
-                std::cout << "uri: " << uri << std::endl;
                 std::string local = client->location->path;
-                std::cout << "local: " << local << std::endl;
                 client->systemPath = client->location->root;
                     if (uri.rfind(local, 0) == 0) {
                         std::string relative = uri.substr(local.size());
@@ -378,7 +374,6 @@ void Server::handleHeaderBody(Client *client)
                         }
                     }
 
-                std::cout << "Path#1: " << client->systemPath << std::endl;
                 if (this->isDirectory("./" + client->systemPath)) {
                     if (client->location->index.empty() == false) {
                         if (client->systemPath[client->systemPath.size()-1] != '/') {
@@ -397,7 +392,6 @@ void Server::handleHeaderBody(Client *client)
 				locationFallBack(client);
                 return errorResponse(client, 404);
             }
-            std::cout << "Path#2: " << client->systemPath << std::endl;
         }
     }
 
@@ -473,7 +467,6 @@ void Server::handleRequest(Client * client)
     std::string uri = request.getURI();
 
     if (client->state == SET_CGI) {
-        std::cout << "SET CGI" << std::endl;
         std::string execute;
         std::string type;
         if (client->location->cgiBin != "") {
@@ -533,7 +526,6 @@ void Server::handleRequest(Client * client)
     }
 
     if (client->state == GET) {
-        std::cout << "GET" << std::endl;
 		bool hasFile = isFile(client->systemPath);
 		if (client->location->autoIndex && !hasFile) {
 			std::string indexFile = client->location->index;
@@ -698,7 +690,6 @@ void Server::errorResponse(Client *client, int code)
     serverMapIt hasErrorLocal = client->location->customError.find(code);
 	if (hasErrorLocal != client->location->customError.end()) {
 		std::string path = hasErrorLocal->second;
-        std::cout << " hasErrorLocal" << path  << std::endl;
 		if (isFile(path)) {
 			fileToOutput(client, code, path);
 			return setResponse(client);
@@ -708,7 +699,6 @@ void Server::errorResponse(Client *client, int code)
 	serverMapIt hasErrorSrv = client->location->fallbackErrorPages->find(code);
 	if (hasErrorSrv != client->location->fallbackErrorPages->end()) {
 		std::string path = hasErrorSrv->second;
-        std::cout << "hasErrorSrv" << path  << std::endl;
 		if (isFile(path)) {
 			fileToOutput(client, code, path);
 			return setResponse(client);
