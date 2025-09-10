@@ -28,6 +28,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <dirent.h>
+#include <ctime>
 
 Server* g_server = NULL;
 
@@ -190,7 +191,7 @@ bool Server::removeClientByFd(const int client_fd)
     Client *client = it->second;
     ::remove(client->inputPath.c_str());
 	std::ostringstream oss;
-    oss << "/tmp/cgi_output_" << client->getId();
+    oss << "tmp/cgi_output_" << client->getId();
 	std::string tmpFile = oss.str();
 	if (client->outputPath == tmpFile) {
 		::remove(client->outputPath.c_str());
@@ -200,24 +201,7 @@ bool Server::removeClientByFd(const int client_fd)
 	client = NULL;
     return true;
 }
-void Server::backSlashNormalize(std::string &str) {
-	if (!str.empty() && str[str.size() - 1] == '/') {
-		str.erase(str.size() - 1);
-	}
-}
- 
-bool getRegexMatch(std::string path, std::string fileExtension) {
-    if (path.find("~") != std::string::npos) {
-        size_t start = path.find('.');
-        size_t end = path.find('$');
-        if (start == std::string::npos || end == std::string::npos) {
-            return false;
-        }
-        std::string ext = path.substr(start, end - start);
-        if (ext == fileExtension) return true;
-    }
-    return false;
-}
+
 
 Config::LocationConfig *Server::getServerConfig(Client *client)
 {
@@ -225,27 +209,21 @@ Config::LocationConfig *Server::getServerConfig(Client *client)
     std::string host = client->getRequest().getHostname();
     Config::LocationConfig *bestLocation = NULL;
     std::string requestURI = client->getRequest().getURI();
-    std::string regex;
     for (size_t it = 0; it < this->_locations.size(); ++it) {
 		if (_locations[it]->server_fd != client->server_fd ||
 				host != this->_locations[it]->server_name ) {
 			continue;
 		}
-        std::string locationPath = this->_locations[it]->path;
-        if (locationPath != "/" && requestURI != "/") {
-			backSlashNormalize(requestURI);
-			backSlashNormalize(locationPath);
-        }
-        if (requestURI.compare(0, locationPath.size(), locationPath) == 0) {
-			bool isExactMatch = requestURI.size() == locationPath.size();
-			bool isRoot = (locationPath == "/");
-			bool hasTrailingSlash = (requestURI.size() > locationPath.size() &&
-				requestURI[locationPath.size()] == '/');
-            if (isExactMatch || hasTrailingSlash || isRoot) {
-                if (locationPath.size() > maxLength) {
-                    bestLocation = this->_locations[it];
-                    maxLength = locationPath.size();
-                }
+        std::string path = this->_locations[it]->path;
+        std::cout << "requestURI: " << requestURI<< std::endl;
+        std::cout << "locationPath: " << path<< std::endl;
+        if (path == requestURI) return this->_locations[it];
+        if (path == "/" && requestURI == "/") return this->_locations[it];
+
+        if (requestURI.compare(0, path.size(), path) == 0) {
+            if (path.size() > maxLength) {
+                bestLocation = this->_locations[it];
+                maxLength = path.size();
             }
         }
     }
@@ -358,6 +336,7 @@ void Server::handleHeaderBody(Client *client)
         if (client->parseHeader() && !client->location) {
             client->location = this->getServerConfig(client);
             if (client->location) {
+                std::cout << *client->location << std::endl;
                 if (!isAllowedMethod(client->location->allowed_methods, request.getMethod())) {
                     return errorResponse(client, 405);
                 }
@@ -369,16 +348,14 @@ void Server::handleHeaderBody(Client *client)
                     }
                 }
                 std::string uri = request.getURI();
-                std::string local = client->location->path;
+                std::string path = client->location->path;
                 client->systemPath = client->location->root;
-                if (uri.rfind(local, 0) == 0) {
-                    std::string relative = uri.substr(local.size());
-                    if (!relative.empty()) {
-                        if (client->systemPath[client->systemPath.size()-1] != '/' && relative[0] != '/') {
-                            client->systemPath += '/';
-                        }
-                        client->systemPath += relative;
+                if (uri.rfind(path, 0) == 0) {
+                    std::string relative = uri.substr(path.size());
+                    if (client->systemPath[client->systemPath.size()-1] != '/' && relative[0] != '/') {
+                        client->systemPath += '/';
                     }
+                    client->systemPath += relative;
                 }
                 if (this->isDirectory("./" + client->systemPath)) {
                     if (client->location->index.empty() == false) {
@@ -424,7 +401,6 @@ void Server::fileToOutput(Client *client, int code, std::string path) {
 	res.setStatus(code);
 	res.setContentType(mimeType);
 	res.setFileContentLength(path, 0);
-	res.setHeader("Connection", "close");
 	client->bodyOffSet = 0;
 }
 
@@ -450,13 +426,13 @@ void Server::extractCGIHeaders(const std::string &cgiHeader, std::string &conten
 		}
 		std::string toLowerCase = line;
 		std::transform(toLowerCase.begin(), toLowerCase.end(), toLowerCase.begin(), ::tolower);
-		if (toLowerCase.find("content-type: ") == 0) {
+		if (toLowerCase.find("content-type") == 0) {
 			size_t delimiter = line.find(':');
 			if (delimiter != std::string::npos) {
 				contentType = line.substr(delimiter+1);
 				contentType = trim(contentType);
 			}
-		} else if (toLowerCase.find("status: ") == 0) {
+		} else if (toLowerCase.find("status") == 0) {
 			size_t delimiter = line.find(':');
 			if (delimiter != std::string::npos) {
 				status = line.substr(delimiter+1);
@@ -473,17 +449,10 @@ void Server::handleRequest(Client * client)
     std::string uri = request.getURI();
 
     if (client->state == SET_CGI) {
+        std::cout << "SET_CGI" << std::endl;
         std::string execute;
-        std::string type;
-        if (client->location->cgiBin != "") {
-            execute = client->location->cgiBin;
-            type = "BIN";
-        }
-        if (client->location->cgiPass != "") {
-            execute = client->location->cgiPass;
-            type = "PASS";
-        }
-        runCGI(client, type, execute);
+        execute = client->location->cgiPass;
+        runCGI(client, execute);
     }
 
     if (client->state == PROCESS_CGI)
@@ -560,8 +529,7 @@ void Server::handleRequest(Client * client)
     }
 
     if (client->state == POST) {
-        response.setStatus(201);
-        response.setHeader("Location", client->getRequest().getMethod());
+        response.setStatus(200);
         client->state = SET_RESPONSE;
     }
 
@@ -589,7 +557,7 @@ void Server::handleRequest(Client * client)
     }
 }
 
-void Server::runCGI(Client *client, const std::string &type, const std::string &execute)
+void Server::runCGI(Client *client, const std::string &execute)
 {
     pid_t pid = fork();
     if (pid < 0)
@@ -614,15 +582,14 @@ void Server::runCGI(Client *client, const std::string &type, const std::string &
         close(in);
         close(out);
         client->getRequest().setCGIEnvironment(client);
-        if (type == "BIN") {
-            execlp(execute.c_str(), execute.c_str(), NULL);
-        } else if (type == "PASS") {
-            execlp(execute.c_str(), execute.c_str(), client->systemPath.c_str(), NULL);
-        }
+        execlp(execute.c_str(), execute.c_str(), client->systemPath.c_str(), NULL);
+        /* ubuntu_cgi_tester */
+        //execlp(execute.c_str(), execute.c_str(), NULL);
         perror("execlp");
-        exit(1);
+        exit(2);
     }
-    _childProcesses[pid] = client->client_fd;
+    time_t now = std::time(NULL);
+    _childProcesses[pid] = std::make_pair(client->client_fd, now);
     client->state = WRITING;
 }
 
@@ -645,13 +612,22 @@ bool Server::isFile(const std::string &path)
 void Server::checkChildProcesses()
 {
     for (ChildIt it = _childProcesses.begin(); it != _childProcesses.end();) {
+        Client *t = this->_clients[it->second.first];
+        time_t startTime = it->second.second;
         int status;
-        pid_t result = waitpid(it->first, &status, WNOHANG);
-        if (result > 0) {
-            Client *t = this->_clients[it->second];
+        pid_t pid = waitpid(it->first, &status, WNOHANG);
+        time_t elapsed = std::time(NULL) - startTime;
+        if (elapsed > t->cgi_timeout) {
+            kill(pid, SIGKILL);
+            waitpid(pid, &status, 0);
+            errorResponse(t, 504);
+            _childProcesses.erase(it++);
+            continue;
+        }
+        if (pid > 0) {
             if (WIFEXITED(status)) {
                 int exitStatus = WEXITSTATUS(status);
-                if (exitStatus != 0 && exitStatus != 1) {
+                if (exitStatus != 0) {
                     this->errorResponse(t, 500);
                     _childProcesses.erase(it++);
                     return;
@@ -666,7 +642,7 @@ void Server::checkChildProcesses()
             handleRequest(t);
             _childProcesses.erase(it++);
             return;
-        } else if (result == -1) {
+        } else if (pid == -1) {
             perror("waitpid");
             _childProcesses.erase(it++);
         } else {
@@ -731,13 +707,24 @@ enum ClientState Server::setState(Client *client)
     }
 }
 
+std::string Server::getFileName(const std::string &uri)
+{
+    size_t qpos = uri.find_first_of("?#");
+    std::string path = (qpos != std::string::npos) ? uri.substr(0, qpos) : uri;
+
+    size_t slash = path.find_last_of('/');
+    if (slash != std::string::npos && slash + 1 < path.size())
+        return path.substr(slash + 1);
+    return path;
+}
+
 std::string Server::getFileExtension(const std::string &uri)
 {
-    size_t dot = uri.find_last_of('.');
-    if (dot != std::string::npos) {
-        return uri.substr(dot);
-    }
-    return "NOT FOUND";
+    std::string filename = getFileName(uri);
+    size_t dot = filename.find_last_of('.');
+    if (dot != std::string::npos)
+        return filename.substr(dot);
+    return ""; 
 }
 
 std::string Server::generateAutoIndex(const std::string &dirPath, std::string &requestPath)
@@ -771,6 +758,7 @@ std::string Server::generateAutoIndex(const std::string &dirPath, std::string &r
 void Server::setResponse(Client *client)
 {
     Response &response = client->getResponse();
+
     response.build();
     client->state = PROCESS_RESPONSE;
     this->switchEvents(client->client_fd, "POLLOUT");
@@ -779,9 +767,26 @@ void Server::setResponse(Client *client)
 
 bool Server::isCGI(Client *client)
 {
+    std::cout << "client->systemPath: " << client->systemPath << std::endl;
     bool isExtension = getFileExtension(client->systemPath) == client->location->cgiExtension;
-    bool isUpload = client->location->allowUpload;
+    std::cout << "isExtension: " << isExtension << std::endl;
     bool hasCGIPass = client->location->cgiPass.empty() == false;
-    bool hasCGIBin =  client->location->cgiBin.empty() == false;
-    return (hasCGIBin || hasCGIPass) && (isExtension || isUpload);
+    std::cout << "hasCGIPass: " << hasCGIPass << std::endl;
+    return (hasCGIPass && isExtension);
+}
+
+bool Server::createTmpFolder( void ) {
+    std::string path = "tmp";
+    struct stat st;
+    if (stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+        return true;
+    }
+
+    if (mkdir(path.c_str(), 0755) == -1) {
+        throw std::runtime_error("Error: mkdir tmp");
+        return false;
+    } else {
+        
+        return true;
+    }
 }

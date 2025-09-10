@@ -42,6 +42,7 @@ int main(int argc, char* argv[]) {
 	signal(SIGINT, signalHandle);
     try {
         server.setup(config);
+        server.createTmpFolder();
 		server.run();
     }
     catch (const std::exception &e) {

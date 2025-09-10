@@ -113,14 +113,14 @@ std::string trim(const std::string &line)
 void Config::validate(const LocationConfig &config) const
 {
     if (config.port <= 0 || config.port > 65535) {
-        throw std::runtime_error("Error: listen directive.");
+        throw std::runtime_error("Error: listen");
 	}
 	if (trim(config.path).empty())
-		throw std::runtime_error("Error: location directive.");
+		throw std::runtime_error("Error: location");
 	if (config.path[0] != '/')
-		throw std::runtime_error("Error: location directive.");
+		throw std::runtime_error("Error: location");
 	if (config.server_name.empty())
-		throw std::runtime_error("Error: server_name directive.");
+		throw std::runtime_error("Error: server_name");
 }
 
 size_t Config::parseSize(const std::string &str)
@@ -288,8 +288,6 @@ bool Config::parseFile(const std::string &filename)
                         location.cgiExtension = tokens[1];
                     else if (tokens[0] == "cgi_pass")
                         location.cgiPass = tokens[1];
-                    else if (tokens[0] == "cgi_bin")
-                        location.cgiBin = tokens[1];
                     else if (tokens[0] == "allow_methods")
                         getMethods(tokens, location);
                     else if (tokens[0] == "index")
@@ -344,7 +342,6 @@ std::ostream& operator<<(std::ostream& os, const Config::LocationConfig& locatio
        << ", allow_upload: " << location.allowUpload
        << ", upload_store: " << location.uploadStore
        << ", cgi_pass: " << location.cgiPass
-       << ", cgi_bin: " << location.cgiBin
        << ", redirectCode: " << location.redirectCode
        << ", redirectPath: " << location.redirectPath
        << ", autoIndex: " << (location.autoIndex ? "true" : "false")

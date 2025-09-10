@@ -55,6 +55,7 @@ public:
     std::string outputPath;
     std::string inputPath;
     std::string systemPath;
+    int cgi_timeout;
 
     Client(void);
     Client(int client_fd, int server_fd);

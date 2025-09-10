@@ -119,7 +119,7 @@ void Request::parseHeaders(const std::string &headerSection)
 void Request::setCGIEnvironment(Client *client) const
 {
     Request &request = client->getRequest();
-
+  
     // Basic CGI environment variables
     setenv("QUERY_STRING", request.getQuery().c_str(), 1);
     setenv("REQUEST_METHOD", request.getMethod().c_str(), 1);

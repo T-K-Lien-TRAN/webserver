@@ -38,7 +38,8 @@ Client::Client(int client_fd, int server_fd) :
 	write_fd(0),
     bodyOffSet(0),
     location(NULL),
-    state(HEADER)
+    state(HEADER),
+    cgi_timeout(30)
 {
     this->_request = Request();
     this->_response = Response();
@@ -47,11 +48,11 @@ Client::Client(int client_fd, int server_fd) :
     std::cout << "[Client#" << _id << "] created" << std::endl;
 
     std::ostringstream oss;
-    oss << "/tmp/cgi_input_" << getId();
+    oss << "tmp/cgi_input_" << getId();
     this->inputPath = oss.str();
 
     oss.str("");
-    oss << "/tmp/cgi_output_" << getId();
+    oss << "tmp/cgi_output_" << getId();
     this->outputPath = oss.str();
 }
 

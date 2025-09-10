@@ -45,7 +45,6 @@ public:
         std::string uploadStore;
 		std::string cgiExtension;
 		std::string cgiPass;
-		std::string cgiBin;
 		bool autoIndex;
 		size_t maxBodySize;
 		std::vector<std::string> allowed_methods;
