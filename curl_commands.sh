@@ -1,20 +1,7 @@
-#!/bin/bash
-HOST=$1
-PORT=$2
-PATH=${3:-/}
-
-#GET
-/usr/bin/curl -v http://localhost:$PORT$PATH -H "Host: $HOST"
-
-#DELETE
-/usr/bin/curl -v -X DELETE http://localhost:$PORT$PATH_PARAM -H "Host: $HOST"
-
 #GET SITE
 curl -v http://localhost:8080/
 curl -v http://localhost:8081/
-curl -v -H "Host: virtual_host" http://localhost:8081/
-curl -v --resolve virtual_host:8081:127.0.0.1 http://virtual_host:8081/
-curl -v --resolve example.com:8082:127.0.0.1 http://example.com:8082/
+curl -v --resolve virtual_host:8081:127.0.0.1 http://localhost:8081/
 
 #ERROR PAGE
 curl -v http://localhost:8080/default-error-page.html
@@ -23,12 +10,13 @@ curl -v http://localhost:8080/notfound/custom-error-page.html
 #BODY LIMIT
 curl -v -X POST -H "Content-Type: text/plain" --data "small" http://localhost:8080/bodylimit/
 curl -v -X POST -H "Content-Type: text/plain" --data "bigger than 10 bytes" http://localhost:8080/bodylimit/
-curl -v -X POST -H "Content-Type: text/plain" --data "1234567890" http://localhost:8080/bodylimit/
-curl -v -X POST -H "Content-Type: text/plain" --data "12345678901" http://localhost:8080/bodylimit/
 
 #ROUTING
 curl -v http://localhost:8080/about/
 curl -v http://localhost:8080/upload/
+curl -v http://localhost:8080/route/blog/100
+curl -v http://localhost:8080/route/blog/42
+
 
 #METHODS
 curl -X DELETE -v http://localhost:8080/methods/somefile.txt

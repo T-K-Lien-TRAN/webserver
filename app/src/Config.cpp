@@ -55,7 +55,7 @@ std::vector<Config::ServerConfig> &Config::getServers()
 		if (it != checkServer.end()) {
 			if (it->second == srv.server_name) {
 				std::cerr << it->second << ":" << srv.server_name << std::endl;
-				throw std::runtime_error("Error: double server.");
+				throw std::runtime_error("Error: server.");
 			}
 		} else {
 			checkServer[srv.port] = srv.server_name;
@@ -66,6 +66,8 @@ std::vector<Config::ServerConfig> &Config::getServers()
             root.root = srv.root;
             root.maxBodySize = srv.maxBodySize;
             root.index = srv.index;
+			root.redirectCode = srv.redirectCode;
+			root.redirectPath = srv.redirectPath;
             srv.locations.push_back(root);
         }
         // Inherit missing settings in all locations
@@ -77,10 +79,14 @@ std::vector<Config::ServerConfig> &Config::getServers()
 				local.maxBodySize = srv.maxBodySize;
             if (local.index.empty())
 				local.index = srv.index;
-			if (srv.customError.empty() == false)
+			if (local.customError.empty())
 				copyErrorPages(local.customError, srv.customError);
-			if (srv.root.empty() == false)
+			if (local.root.empty())
 				local.serverRoot = srv.root;
+			if (local.redirectPath.empty()) {
+				local.redirectPath = srv.redirectPath;
+				local.redirectCode = srv.redirectCode;
+			}
             local.port = srv.port;
             local.server_name = srv.server_name;
 			local.fallbackErrorPages = &srv.customError;
@@ -112,14 +118,18 @@ std::string trim(const std::string &line)
 
 void Config::validate(const LocationConfig &config) const
 {
-    if (config.port <= 0 || config.port > 65535) {
+    if (config.port <= 0 || config.port > 65535)
         throw std::runtime_error("Error: listen");
+	else if (config.redirectPath.empty() == false ) {
+		if (config.redirectCode != 301 && config.redirectCode != 302) {
+				throw std::runtime_error("Error: redirectCode");
+		}
 	}
-	if (trim(config.path).empty())
+	else if (trim(config.path).empty())
 		throw std::runtime_error("Error: location");
-	if (config.path[0] != '/')
+	else if (config.path[0] != '/')
 		throw std::runtime_error("Error: location");
-	if (config.server_name.empty())
+	else if (config.server_name.empty())
 		throw std::runtime_error("Error: server_name");
 }
 
@@ -264,8 +274,12 @@ bool Config::parseFile(const std::string &filename)
                     current.root = tokens[1];
                 else if (tokens[0] == "index")
                     current.index = tokens[1];
-                if (tokens[0] == "max_body_size")
-                    current.maxBodySize = this->parseSize(tokens[1]);
+				else if (tokens[0] == "redirect") {
+					current.redirectCode = std::atoi(tokens[1].c_str());
+					current.redirectPath = tokens[2];
+				}
+				else if (tokens[0] == "max_body_size")
+					current.maxBodySize = this->parseSize(tokens[1]);
                 else
                     commonToken(tokens, current);
             }
@@ -278,10 +292,10 @@ bool Config::parseFile(const std::string &filename)
 
             if (inside_location)
             {
-                if (tokens.size() >= 2)
-                {
-                    if (tokens[0] == "location")
+                if (tokens.size() >= 2) {
+                    if (tokens[0] == "location") {
                         location.path = tokens[1];
+					}
                     else if (tokens[0] == "root")
                         location.root = tokens[1];
                     else if (tokens[0] == "cgi_extension")
@@ -298,8 +312,12 @@ bool Config::parseFile(const std::string &filename)
                         location.allowUpload = true;
                     else if (tokens[0] == "upload_store")
                         location.uploadStore = tokens[1];
-                    else if (tokens[0] == "max_body_size")
-                        location.maxBodySize = std::atoi(tokens[1].c_str());
+					else if (tokens[0] == "redirect") {
+						location.redirectCode = std::atoi(tokens[1].c_str());
+						location.redirectPath = tokens[2];
+					}
+					else if (tokens[0] == "max_body_size")
+						location.maxBodySize = this->parseSize(tokens[1]);
                     else
                         commonToken(tokens, location);
                 }
@@ -314,10 +332,6 @@ void Config::commonToken(std::vector<std::string> &tokens, CommonConfig &input)
 {
     if (tokens[0] == "error_page") {
         input.customError[std::atoi(tokens[1].c_str())] = tokens[2];
-    }
-    else if (tokens[0] == "redirect") {
-        input.redirectCode = std::atoi(tokens[1].c_str());
-        input.redirectPath = tokens[2];
     }
 }
 

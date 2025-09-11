@@ -335,11 +335,12 @@ void Server::handleHeaderBody(Client *client)
         if (client->parseHeader() && !client->location) {
             client->location = this->getServerConfig(client);
             if (client->location) {
+				std::cout << *client->location << std::endl;
                 if (!isAllowedMethod(client->location->allowed_methods, request.getMethod())) {
                     return errorResponse(client, 405);
                 }
                 if (client->location->redirectCode) {
-                    if (client->location->redirectPath != "") {
+                    if (client->location->redirectPath.empty() == false) {
                         response.setStatus(client->location->redirectCode);
                         response.setHeader("Location", client->location->redirectPath);
                         return setResponse(client);
@@ -348,6 +349,8 @@ void Server::handleHeaderBody(Client *client)
                 std::string uri = request.getURI();
                 std::string path = client->location->path;
                 client->systemPath = client->location->root;
+				std::cout << "uri: " << uri << std::endl;
+
                 if (uri.rfind(path, 0) == 0) {
                     std::string relative = uri.substr(path.size());
                     if (client->systemPath[client->systemPath.size()-1] != '/' && relative[0] != '/') {
@@ -363,6 +366,7 @@ void Server::handleHeaderBody(Client *client)
                         client->systemPath += client->location->index;
                     }
                 }
+				std::cout << "Path: " << client->systemPath << std::endl;
                 if (!request.hasBody) {
                     client->state = this->setState(client);
                 }
