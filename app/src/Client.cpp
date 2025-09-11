@@ -46,11 +46,11 @@ Client::Client(int client_fd, int server_fd) :
     _id = ++_counter;
 
     std::ostringstream oss;
-    oss << "tmp/cgi_input_" << getId();
+    oss << "tmp/input_" << getId();
     this->inputPath = oss.str();
 
     oss.str("");
-    oss << "tmp/cgi_output_" << getId();
+    oss << "tmp/output_" << getId();
     this->outputPath = oss.str();
 }
 

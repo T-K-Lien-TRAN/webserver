@@ -6,9 +6,6 @@ PATH=${3:-/}
 #GET
 /usr/bin/curl -v http://localhost:$PORT$PATH -H "Host: $HOST"
 
-#POST
-
-
 #DELETE
 /usr/bin/curl -v -X DELETE http://localhost:$PORT$PATH_PARAM -H "Host: $HOST"
 
@@ -43,10 +40,20 @@ curl -X UNKNOWN -v http://localhost:8080/
 #POST
 curl -v -F "file=@files_upload/dog-photo.jpg" http://localhost:8080/uploads/upload.py
 
+#DELETE
+curl -X DELETE -v http://localhost:8080/upload/dog-photo.jpg
+
 #CGI
 curl -v  http://localhost:8080/cgi-bin/$script
-
 curl -v "http://localhost:8080/cgi-bin/hello.py?name=bde-albu"
+
+#BAD_CGI
+curl -v http://localhost:8080/cgi-bin/infinite_loop.py
+
+#403 FORBIDDEN
+curl -v http://localhost:8080/upload/guide.txt
+curl -v "http://localhost:8080/cgi-bin/hello.py?name=bde-albu"
+
 
 
 

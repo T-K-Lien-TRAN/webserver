@@ -78,31 +78,32 @@ void Response::setDefaultErrorBody(int code) {
     setStatus(code);
 }
 
-std::string Response::getMimeType(const std::string& extension) {
-    static std::map<std::string, std::string> mimeTypes;
+MimeInfo Response::getMimeType(const std::string& extension) {
+    std::map<std::string, MimeInfo> mimeTypes;
     if (mimeTypes.empty()) {
-        mimeTypes[".html"] = "text/html";
-        mimeTypes[".htm"]  = "text/html";
-        mimeTypes[".css"]  = "text/css";
-        mimeTypes[".js"]   = "application/javascript";
-        mimeTypes[".json"] = "application/json";
-        mimeTypes[".png"]  = "image/png";
-        mimeTypes[".jpg"]  = "image/jpeg";
-        mimeTypes[".jpeg"] = "image/jpeg";
-        mimeTypes[".gif"]  = "image/gif";
-        mimeTypes[".svg"]  = "image/svg+xml";
-        mimeTypes[".ico"]  = "image/x-icon";
-        mimeTypes[".wav"]  = "audio/wav";
-        mimeTypes[".mp3"]  = "audio/mpeg";
-        mimeTypes[".pdf"]  = "application/pdf";
-        mimeTypes[".zip"]  = "application/zip";
-        mimeTypes[".txt"]  = "text/plain";
+        mimeTypes[".html"] = MimeInfo("text/html", false);
+        mimeTypes[".htm"]  = MimeInfo("text/html", false);
+        mimeTypes[".css"]  = MimeInfo("text/css", false);
+        mimeTypes[".txt"]  = MimeInfo("text/plain", false);
+        mimeTypes[".js"]   = MimeInfo("application/javascript", false);
+        mimeTypes[".json"] = MimeInfo("application/json", false);
+        mimeTypes[".png"]  = MimeInfo("image/png", false);
+        mimeTypes[".jpg"]  = MimeInfo("image/jpeg", false);
+        mimeTypes[".jpeg"] = MimeInfo("image/jpeg", false);
+        mimeTypes[".gif"]  = MimeInfo("image/gif", false);
+        mimeTypes[".svg"]  = MimeInfo("image/svg+xml", false);
+        mimeTypes[".ico"]  = MimeInfo("image/x-icon", false);
+        mimeTypes[".wav"]  = MimeInfo("audio/wav", false);
+        mimeTypes[".mp3"]  = MimeInfo("audio/mpeg", false);
+        mimeTypes[".pdf"]  = MimeInfo("application/pdf", true);
+        mimeTypes[".zip"]  = MimeInfo("application/zip", true);
+		mimeTypes[".exec"] = MimeInfo("application/octet-stream", true);
     }
-    std::map<std::string, std::string>::const_iterator it = mimeTypes.find(extension);
+    std::map<std::string, MimeInfo>::const_iterator it = mimeTypes.find(extension);
     if (it != mimeTypes.end()) {
         return it->second;
     }
-    return "application/octet-stream";
+    return MimeInfo();
 }
 
 void Response::build() {

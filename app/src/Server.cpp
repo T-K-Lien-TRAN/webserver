@@ -63,7 +63,10 @@ void Server::handleClientWrite(Client *client)
         }
         size_t offset = client->bodyOffSet + res.bodyByteIndex;
         ssize_t bytesReader = pread(client->write_fd, client->buffer.data(), client->buffer.size(), offset);
-        byteSend = send(client->client_fd, client->buffer.data(), bytesReader, 0);
+		if (bytesReader > 0) {
+        	byteSend = send(client->client_fd, client->buffer.data(), bytesReader, 0);
+			res.bodyByteIndex += byteSend;
+		}
     }
     if (byteSend > 0) {
         res._indexByteSend += byteSend;
@@ -388,13 +391,18 @@ void Server::handleHeaderBody(Client *client)
 
 void Server::fileToOutput(Client *client, int code, std::string path) {
 	Response &res = client->getResponse();
-	std::ifstream file(path.c_str());
 	std::string ext = getFileExtension(path);
-	std::string mimeType = res.getMimeType(ext);
+	MimeInfo mimeType = res.getMimeType(ext);
+	std::string filename = getFileName(path);
+	std::ostringstream oss;
+    oss << "attachment; filename=\"" << filename << "\"";
+	if (mimeType.download) {
+		res.setHeader("Content-Disposition", oss.str());
+	}
 	res.sendFile = true;
 	client->outputPath = path;
 	res.setStatus(code);
-	res.setContentType(mimeType);
+	res.setContentType(mimeType.type);
 	res.setFileContentLength(path, 0);
 	client->bodyOffSet = 0;
 }
@@ -444,6 +452,9 @@ void Server::handleRequest(Client * client)
     std::string uri = request.getURI();
 
     if (client->state == SET_CGI) {
+		if (access(client->systemPath.c_str(), R_OK) == -1) {
+			return errorResponse(client, 403);
+		}
         std::string execute;
         execute = client->location->cgiPass;
         runCGI(client, execute);
@@ -612,11 +623,9 @@ void Server::checkChildProcesses()
         pid_t pid = waitpid(it->first, &status, WNOHANG);
         time_t elapsed = std::time(NULL) - startTime;
         if (elapsed > t->cgi_timeout) {
-            kill(pid, SIGKILL);
-            waitpid(pid, &status, 0);
-            errorResponse(t, 504);
-            _childProcesses.erase(it++);
-            continue;
+			this->errorResponse(t, 500);
+			_childProcesses.erase(it++);
+			return;
         }
         if (pid > 0) {
             if (WIFEXITED(status)) {

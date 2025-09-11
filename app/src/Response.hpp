@@ -16,6 +16,14 @@
 # include <map>
 # include <string>
 
+
+struct MimeInfo {
+	std::string type;
+    bool download;
+    MimeInfo() : type("application/octet-stream"), download(true) {}
+    MimeInfo(const std::string& t, bool d) : type(t), download(d) {}
+};
+
 class Response
 {
   public:
@@ -35,7 +43,7 @@ class Response
 	void setFileContentLength(std::string path, size_t bodyOffSet);
 	void setContentType(const std::string &type);
 	void setDefaultErrorBody(int code);
-	std::string getMimeType(const std::string &extension);
+	MimeInfo getMimeType(const std::string &extension);
 	void build();
 
   private:
@@ -44,6 +52,7 @@ class Response
 	std::map<std::string, std::string> _headers;
 
 	std::string getStatusMessage(int code) const;
+	std::string getDownloadType(const std::string &extension);
 };
 
 #endif
