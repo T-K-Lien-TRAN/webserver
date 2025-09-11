@@ -51,6 +51,14 @@ struct Multipart {
         nextBondary("") {}
 };
 
+
+enum ChunkParseState {
+    WAITING_FOR_HEADER,
+    READING_BODY,
+    EXPECTING_CRLF,
+    DONE
+};
+
 class Request {
 public:
 
@@ -63,6 +71,7 @@ public:
     size_t byteEnd;
     size_t _bodyEndIndex;
     bool hasBody;
+	ChunkParseState chunkState;
     bool parseHeader(std::vector<char> &raw);
     int parseBody(Client &client);
     std::string getMethod() const;

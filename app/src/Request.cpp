@@ -26,6 +26,7 @@ Request::Request():
     byteEnd(0),
     _bodyEndIndex(0),
     hasBody(false),
+	chunkState(WAITING_FOR_HEADER),
     _writedToDisk(0),
     _chunkSizeToWrite(0),
     _totalBytesRead(0) {}
@@ -119,7 +120,7 @@ void Request::parseHeaders(const std::string &headerSection)
 void Request::setCGIEnvironment(Client *client) const
 {
     Request &request = client->getRequest();
-  
+
     // Basic CGI environment variables
     setenv("QUERY_STRING", request.getQuery().c_str(), 1);
     setenv("REQUEST_METHOD", request.getMethod().c_str(), 1);
@@ -170,64 +171,93 @@ int Request::parseBody(Client &client)
         if (!_out.is_open()) {
             _out.open(client.inputPath.c_str(), std::ios::binary | std::ios::out | std::ios::trunc);
         }
-        std::string headerEnd = "\r\n";
-        while (true) {
-            if (chunk.chunckSize == 0)
-            {
-                std::vector<char>::iterator it = std::search(
-                    client.buffer.begin() + byteStart, client.buffer.end(), headerEnd.begin(), headerEnd.end()
-                );
-                if (it == client.buffer.end()) {
-                    break;
-                }
-                chunk.hex.assign(client.buffer.begin() + byteStart, it);
-                chunk.chunckSize = strtoul(chunk.hex.c_str(), NULL, 16);
-                byteStart += std::distance(client.buffer.begin() + byteStart, it) + 2;
-            }
-            if (!chunk.chunckSize && !chunk.bytesRead)
-            {
-                if (byteEnd >= byteStart + 2) {
-                    byteStart += 2;
-                }
-                if (_out.is_open()) {
-                    _out.close();
-                }
-                return 0;
-            }
-            size_t available = byteEnd - byteStart;
-            if (available <= 0 || byteStart >= client.buffer.size()) {
-                break;
-            }
-            size_t toWrite = std::min(chunk.chunckSize - chunk.bytesRead, available);
-            toWrite = std::min(toWrite, client.buffer.size() - byteStart);
-            if (toWrite > 0 && _out.is_open())
-            {
-                _out.write(client.buffer.data() + byteStart, toWrite);
-                byteStart += toWrite;
-                chunk.bytesRead += toWrite;
-                _writedToDisk += toWrite;
-				if (_out.fail()) {
-					_out.close();
-					return 4;
+		while (true) {
+			if (chunkState == WAITING_FOR_HEADER) {
+				if (byteStart >= byteEnd) return 1;
+
+				std::string headerEnd = "\r\n";
+				std::vector<char>::iterator it = std::search(
+					client.buffer.begin() + byteStart,
+					client.buffer.begin() + byteEnd,
+					headerEnd.begin(),
+					headerEnd.end()
+				);
+
+				if (it == client.buffer.begin() + byteEnd) return 1;
+
+				std::string raw(client.buffer.begin() + byteStart, it);
+				raw.erase(raw.find_last_not_of(" \r\n") + 1);
+
+				bool isHex = true;
+				for (std::string::iterator ch = raw.begin(); ch != raw.end(); ++ch) {
+					if (!std::isxdigit(*ch)) {
+						isHex = false;
+						break;
+					}
 				}
-            }
-            if (maxBodySize && this->_writedToDisk > maxBodySize) {
-                if (_out.is_open()) {
-                    _out.close();
-                }
-                return 2;
-            }
-            if (chunk.bytesRead < chunk.chunckSize) {
-                break;
-            }
-            if (byteEnd < byteStart + 2) {
-                break;
-            }
-            byteStart += 2;
-            chunk.chunckSize = 0;
-            chunk.bytesRead = 0;
-            chunk.hex.clear();
-        }
+
+				if (raw.empty() || !isHex) {
+					return 3;
+				}
+
+				chunk.hex = raw;
+				chunk.chunckSize = strtoul(chunk.hex.c_str(), NULL, 16);
+				byteStart += std::distance(client.buffer.begin() + byteStart, it) + 2;
+
+				if (chunk.chunckSize == 0) {
+					chunkState = DONE;
+					continue;
+				}
+
+				chunk.bytesRead = 0;
+				chunkState = READING_BODY;
+			}
+			if (chunkState == READING_BODY) {
+				size_t available = byteEnd - byteStart;
+				if (available <= 0) return 1;
+
+				size_t toWrite = std::min(chunk.chunckSize - chunk.bytesRead, available);
+				if (toWrite > 0) {
+					_out.write(client.buffer.data() + byteStart, toWrite);
+					if (_out.fail()) {
+						_out.close();
+						return 4;
+					}
+
+					byteStart += toWrite;
+					chunk.bytesRead += toWrite;
+					_writedToDisk += toWrite;
+
+					if (maxBodySize && _writedToDisk > maxBodySize) {
+						_out.close();
+						return 2;
+					}
+				}
+
+				if (chunk.bytesRead < chunk.chunckSize) return 1;
+
+				chunkState = EXPECTING_CRLF;
+			}
+			if (chunkState == EXPECTING_CRLF) {
+				if (byteEnd < byteStart + 2) return 1;
+				if (client.buffer[byteStart] != '\r' || client.buffer[byteStart + 1] != '\n') {
+					return 3;
+				}
+
+				byteStart += 2;
+				chunk.chunckSize = 0;
+				chunk.bytesRead = 0;
+				chunk.hex.clear();
+				chunkState = WAITING_FOR_HEADER;
+			}
+
+			if (chunkState == DONE) {
+				if (byteEnd < byteStart + 2) return 1;
+				byteStart += 2;
+				_out.close();
+				return 0;
+			}
+		}
     } else if (contentLength.empty() == false) {
         if (!_out.is_open()) {
             _out.open(client.inputPath.c_str(), std::ios::binary | std::ios::out | std::ios::trunc);

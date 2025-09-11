@@ -23,7 +23,7 @@
 int Client::_counter = 0;
 
 Client::Client(void) :
-    buffer( 1024 * 16 ),
+    buffer( 1024 * 32 ),
     client_fd(0),
     server_fd(0),
 	write_fd(0),
@@ -32,20 +32,18 @@ Client::Client(void) :
 }
 
 Client::Client(int client_fd, int server_fd) :
-    buffer( 1024 * 16 ),
+    buffer( 1024 * 32 ),
     client_fd(client_fd),
     server_fd(server_fd),
 	write_fd(0),
     bodyOffSet(0),
     location(NULL),
     state(HEADER),
-    cgi_timeout(30)
+    cgi_timeout(90)
 {
     this->_request = Request();
     this->_response = Response();
     _id = ++_counter;
-
-    std::cout << "[Client#" << _id << "] created" << std::endl;
 
     std::ostringstream oss;
     oss << "tmp/cgi_input_" << getId();
@@ -57,7 +55,7 @@ Client::Client(int client_fd, int server_fd) :
 }
 
 Client::~Client() {
-    std::cout << "[Client#" << _id << "] destroyed" << std::endl;
+    // std::cout << "[Client#" << _id << "] disconnect" << std::endl;
 }
 
 std::vector<char> &Client::getBuffer()
@@ -112,7 +110,9 @@ void Client::receive()
 		this->state = DISCONNECT;
         return;
     }
-    _request.byteEnd += bytesReader;
+	if (bytesReader > 0) {
+		_request.byteEnd += bytesReader;
+	}
 }
 
 int Client::getId(void) const

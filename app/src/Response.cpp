@@ -60,8 +60,7 @@ void Response::setBody(const std::string &body) {
 void Response::setFileContentLength(std::string path, size_t bodyOffSet)
 {
     struct stat st;
-    if (stat(path.c_str(), &st) == 0)
-    {
+    if (stat(path.c_str(), &st) == 0) {
         std::ostringstream oss;
         oss << st.st_size - bodyOffSet;
         _headers["Content-Length"] = oss.str();

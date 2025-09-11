@@ -7,7 +7,7 @@ PATH=${3:-/}
 /usr/bin/curl -v http://localhost:$PORT$PATH -H "Host: $HOST"
 
 #POST
-/usr/bin/curl --data-binary "@42.txt" http://localhost:8081/site4/upload/42.tx -H "Host: $HOST"
+
 
 #DELETE
 /usr/bin/curl -v -X DELETE http://localhost:$PORT$PATH_PARAM -H "Host: $HOST"
@@ -37,12 +37,19 @@ curl -v http://localhost:8080/upload/
 curl -X DELETE -v http://localhost:8080/methods/somefile.txt
 curl -X POST -v http://localhost:8080/methods/
 curl -X GET -v http://localhost:8080/methods/
-
-curl -v -F "file=@dog-photo.jpg" http://localhost:8080/uploads/
 curl -X DELETE -v http://localhost:8080/uploads/dog-photo.jpg
-
 curl -X UNKNOWN -v http://localhost:8080/
 
+#POST
+curl -v -F "file=@files_upload/dog-photo.jpg" http://localhost:8080/uploads/upload.py
 
-#SIEGE
-docker run --rm yokogawa/siege -b -c10 -t30s http://localhost:8080/
+#CGI
+curl -v  http://localhost:8080/cgi-bin/$script
+
+curl -v "http://localhost:8080/cgi-bin/hello.py?name=bde-albu"
+
+
+
+
+
+

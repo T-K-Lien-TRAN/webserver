@@ -63,14 +63,7 @@ void Server::handleClientWrite(Client *client)
         }
         size_t offset = client->bodyOffSet + res.bodyByteIndex;
         ssize_t bytesReader = pread(client->write_fd, client->buffer.data(), client->buffer.size(), offset);
-        if (bytesReader <= 0) {
-			client->state = COMPLETED;
-            return;
-        }
         byteSend = send(client->client_fd, client->buffer.data(), bytesReader, 0);
-        if (byteSend > 0) {
-            res.bodyByteIndex += byteSend;
-        }
     }
     if (byteSend > 0) {
         res._indexByteSend += byteSend;
@@ -203,27 +196,30 @@ bool Server::removeClientByFd(const int client_fd)
 }
 
 
+std::string Server::normalize(const std::string& str) {
+    if (str.empty()) return "/";
+    if (str[str.size()-1] != '/') return str + '/';
+    return str;
+}
+
 Config::LocationConfig *Server::getServerConfig(Client *client)
 {
     size_t maxLength = 0;
     std::string host = client->getRequest().getHostname();
     Config::LocationConfig *bestLocation = NULL;
-    std::string requestURI = client->getRequest().getURI();
+    std::string uri = client->getRequest().getURI();
+	std::string normalizedUri = normalize(uri);
     for (size_t it = 0; it < this->_locations.size(); ++it) {
 		if (_locations[it]->server_fd != client->server_fd ||
 				host != this->_locations[it]->server_name ) {
 			continue;
 		}
-        std::string path = this->_locations[it]->path;
-        std::cout << "requestURI: " << requestURI<< std::endl;
-        std::cout << "locationPath: " << path<< std::endl;
-        if (path == requestURI) return this->_locations[it];
-        if (path == "/" && requestURI == "/") return this->_locations[it];
-
-        if (requestURI.compare(0, path.size(), path) == 0) {
-            if (path.size() > maxLength) {
+		std::string normalizedPath = normalize(this->_locations[it]->path);
+        if (normalizedPath == normalizedUri) return this->_locations[it];
+        if (normalizedUri.compare(0, normalizedPath.size(), normalizedPath) == 0) {
+            if (normalizedPath.size() > maxLength) {
                 bestLocation = this->_locations[it];
-                maxLength = path.size();
+                maxLength = normalizedPath.size();
             }
         }
     }
@@ -336,7 +332,6 @@ void Server::handleHeaderBody(Client *client)
         if (client->parseHeader() && !client->location) {
             client->location = this->getServerConfig(client);
             if (client->location) {
-                std::cout << *client->location << std::endl;
                 if (!isAllowedMethod(client->location->allowed_methods, request.getMethod())) {
                     return errorResponse(client, 405);
                 }
@@ -449,7 +444,6 @@ void Server::handleRequest(Client * client)
     std::string uri = request.getURI();
 
     if (client->state == SET_CGI) {
-        std::cout << "SET_CGI" << std::endl;
         std::string execute;
         execute = client->location->cgiPass;
         runCGI(client, execute);
@@ -584,7 +578,7 @@ void Server::runCGI(Client *client, const std::string &execute)
         client->getRequest().setCGIEnvironment(client);
         execlp(execute.c_str(), execute.c_str(), client->systemPath.c_str(), NULL);
         /* ubuntu_cgi_tester */
-        //execlp(execute.c_str(), execute.c_str(), NULL);
+        // execlp(execute.c_str(), execute.c_str(), NULL);
         perror("execlp");
         exit(2);
     }
@@ -703,7 +697,7 @@ enum ClientState Server::setState(Client *client)
     } else if (request.getMethod() == "DELETE") {
         return DELETE;
     } else {
-        return client->state;
+        return COMPLETED;
     }
 }
 
@@ -724,7 +718,7 @@ std::string Server::getFileExtension(const std::string &uri)
     size_t dot = filename.find_last_of('.');
     if (dot != std::string::npos)
         return filename.substr(dot);
-    return ""; 
+    return "";
 }
 
 std::string Server::generateAutoIndex(const std::string &dirPath, std::string &requestPath)
@@ -767,11 +761,8 @@ void Server::setResponse(Client *client)
 
 bool Server::isCGI(Client *client)
 {
-    std::cout << "client->systemPath: " << client->systemPath << std::endl;
     bool isExtension = getFileExtension(client->systemPath) == client->location->cgiExtension;
-    std::cout << "isExtension: " << isExtension << std::endl;
     bool hasCGIPass = client->location->cgiPass.empty() == false;
-    std::cout << "hasCGIPass: " << hasCGIPass << std::endl;
     return (hasCGIPass && isExtension);
 }
 
@@ -786,7 +777,7 @@ bool Server::createTmpFolder( void ) {
         throw std::runtime_error("Error: mkdir tmp");
         return false;
     } else {
-        
+
         return true;
     }
 }
