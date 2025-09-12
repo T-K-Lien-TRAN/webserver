@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
+
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 import os
 import sys
 import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
 import cgi
 
 

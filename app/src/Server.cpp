@@ -360,15 +360,8 @@ void Server::handleHeaderBody(Client *client)
                     }
                 }
                 std::string fullPath = "./" + client->systemPath;
-                if (access(fullPath.c_str(), F_OK) != 0) {
-                    return errorResponse(client, 404); // Not found
-                }
                 std::string method = request.getMethod();
-                if (method == "GET") {
-                    if (access(fullPath.c_str(), R_OK) != 0) {
-                        return errorResponse(client, 403);
-                    }
-                } else if (method == "POST") {
+                if (method == "POST") {
                     std::string dirPath = fullPath.substr(0, fullPath.find_last_of('/'));
                     if (access(dirPath.c_str(), W_OK) != 0) {
                         return errorResponse(client, 403); 

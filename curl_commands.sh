@@ -38,9 +38,6 @@ curl -v "http://localhost:8080/cgi-bin/hello.py?name=bde-albu"
 #BAD_CGI
 curl -v http://localhost:8080/cgi-bin/infinite_loop.py
 
-#403 FORBIDDEN
-curl -v http://localhost:8080/upload/guide.txt
-curl -v "http://localhost:8080/cgi-bin/hello.py?name=bde-albu"
 
 
 
