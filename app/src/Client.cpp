@@ -52,10 +52,12 @@ Client::Client(int client_fd, int server_fd) :
     oss.str("");
     oss << "tmp/output_" << getId();
     this->outputPath = oss.str();
+    std::cout << "[Client#" << _id << "] connected" << std::endl;
+
 }
 
 Client::~Client() {
-    // std::cout << "[Client#" << _id << "] disconnect" << std::endl;
+    std::cout << "[Client#" << _id << "] disconnect" << std::endl;
 }
 
 std::vector<char> &Client::getBuffer()

@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-import cgi, cgitb
+import warnings
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    import cgi, cgitb
+
+
 cgitb.enable()
 
 print("Content-type: text/html\n")

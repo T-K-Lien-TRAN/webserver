@@ -45,14 +45,22 @@ void Server::handleClientWrite(Client *client)
             res.output.c_str() + res._indexByteSend,
             toSend,
             0);
-    } else if (!res.sendFile){
+        if (byteSend > 0) {
+            res._indexByteSend += byteSend;
+        }
+    }
+    if (!res.sendFile && !(res.headerByteSize > res._indexByteSend)){
         toSend = std::min(CHUNK_SIZE, res._outputLength - res._indexByteSend);
         byteSend = send(
             client->client_fd,
             res.output.c_str() + res._indexByteSend,
             toSend,
             0);
-    } else {
+        if (byteSend > 0) {
+            res._indexByteSend += byteSend;
+        }
+    } 
+    if (res.sendFile && !(res.headerByteSize > res._indexByteSend)) {
         if (client->write_fd == 0) {
             client->write_fd = open(client->outputPath.c_str(), O_RDONLY);
             res.bodyByteIndex = 0;
@@ -67,13 +75,12 @@ void Server::handleClientWrite(Client *client)
         	byteSend = send(client->client_fd, client->buffer.data(), bytesReader, 0);
 			res.bodyByteIndex += byteSend;
 		}
-    }
-    if (byteSend > 0) {
-        res._indexByteSend += byteSend;
+        if (byteSend > 0) {
+            res._indexByteSend += byteSend;
+        }
     }
     if (byteSend <= 0) {
 		client->state = COMPLETED;
-		return;
 	}
     if (res._indexByteSend >= res._outputLength) {
         shutdown(client->client_fd, SHUT_WR);
@@ -187,7 +194,7 @@ bool Server::removeClientByFd(const int client_fd)
     Client *client = it->second;
     ::remove(client->inputPath.c_str());
 	std::ostringstream oss;
-    oss << "tmp/cgi_output_" << client->getId();
+    oss << "tmp/output_" << client->getId();
 	std::string tmpFile = oss.str();
 	if (client->outputPath == tmpFile) {
 		::remove(client->outputPath.c_str());

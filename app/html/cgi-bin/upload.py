@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
 import os
 import sys
 import warnings
-import cgi
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    import cgi
+
 
 
 method = os.environ.get("REQUEST_METHOD", "")
