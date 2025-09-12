@@ -1,0 +1,5 @@
+services:
+  siege:
+    image: openeuler/siege
+    network_mode: host
+    command: ["siege", "-c10", "-t30s", "http://localhost:8080/siege/index.html"]

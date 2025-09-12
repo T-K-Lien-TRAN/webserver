@@ -267,7 +267,7 @@ void Server::acceptNewConnection(int server_fd)
     pfd.fd = client_fd;
     pfd.events = POLLIN;
     pfd.revents = 0;
-    std::cout << std::endl << "Connected:" << inet_ntoa(client_addr.sin_addr) << std::endl;
+    // std::cout << std::endl << "Connected:" << inet_ntoa(client_addr.sin_addr) << std::endl;
     this->_clients[client_fd] = new Client(client_fd, server_fd);
     this->_fds.push_back(pfd);
 }
@@ -287,14 +287,10 @@ void Server::run() {
                     acceptNewConnection(fd);
                 }
             }
-            if (client) {
-                if (_fds[i].revents & POLLOUT) {
-                    handleClientWrite(client);
-                } else if (_fds[i].revents & POLLIN) {
-                    handleHeaderBody(client);
-                }
-                handleRequest(client);
-            }
+            if (client == NULL) continue;
+            if (_fds[i].revents & POLLOUT) handleClientWrite(client);
+            if (_fds[i].revents & POLLIN) handleHeaderBody(client);
+            handleRequest(client);
         }
         for (fdsIt it = _fds.begin(); it != _fds.end(); ) {
             Client *client = this->findByClientFd(it->fd);
@@ -335,7 +331,6 @@ void Server::handleHeaderBody(Client *client)
         if (client->parseHeader() && !client->location) {
             client->location = this->getServerConfig(client);
             if (client->location) {
-				std::cout << *client->location << std::endl;
                 if (!isAllowedMethod(client->location->allowed_methods, request.getMethod())) {
                     return errorResponse(client, 405);
                 }
@@ -349,8 +344,6 @@ void Server::handleHeaderBody(Client *client)
                 std::string uri = request.getURI();
                 std::string path = client->location->path;
                 client->systemPath = client->location->root;
-				std::cout << "uri: " << uri << std::endl;
-
                 if (uri.rfind(path, 0) == 0) {
                     std::string relative = uri.substr(path.size());
                     if (client->systemPath[client->systemPath.size()-1] != '/' && relative[0] != '/') {
@@ -366,7 +359,26 @@ void Server::handleHeaderBody(Client *client)
                         client->systemPath += client->location->index;
                     }
                 }
-				std::cout << "Path: " << client->systemPath << std::endl;
+                std::string fullPath = "./" + client->systemPath;
+                if (access(fullPath.c_str(), F_OK) != 0) {
+                    return errorResponse(client, 404); // Not found
+                }
+                std::string method = request.getMethod();
+                if (method == "GET") {
+                    if (access(fullPath.c_str(), R_OK) != 0) {
+                        return errorResponse(client, 403);
+                    }
+                } else if (method == "POST") {
+                    std::string dirPath = fullPath.substr(0, fullPath.find_last_of('/'));
+                    if (access(dirPath.c_str(), W_OK) != 0) {
+                        return errorResponse(client, 403); 
+                    }
+                } else if (method == "DELETE") {
+                    std::string dirPath = fullPath.substr(0, fullPath.find_last_of('/'));
+                    if (access(dirPath.c_str(), W_OK) != 0) {
+                        return errorResponse(client, 403);
+                    }
+                }
                 if (!request.hasBody) {
                     client->state = this->setState(client);
                 }
@@ -456,12 +468,7 @@ void Server::handleRequest(Client * client)
     std::string uri = request.getURI();
 
     if (client->state == SET_CGI) {
-		if (access(client->systemPath.c_str(), R_OK) == -1) {
-			return errorResponse(client, 403);
-		}
-        std::string execute;
-        execute = client->location->cgiPass;
-        runCGI(client, execute);
+        runCGI(client, client->location->cgiPass);
     }
 
     if (client->state == PROCESS_CGI)
@@ -544,15 +551,7 @@ void Server::handleRequest(Client * client)
 
     if (client->state == DELETE)
     {
-        std::string path = client->systemPath;
-        if (isFile(path) == false) {
-            return errorResponse(client, 404);
-        }
-        std::string parent = path.substr(0, path.find_last_of('/'));
-        if (access(path.c_str(), R_OK ) == -1 || access(parent.c_str(), W_OK) == -1) {
-            return errorResponse(client, 403);
-        }
-        if (remove(path.c_str()) == 0) {
+        if (remove(client->systemPath.c_str()) == 0) {
             response.setStatus(200);
             response.setBody("<h1>File deleted</h1>");
             client->state = SET_RESPONSE;
@@ -591,6 +590,9 @@ void Server::runCGI(Client *client, const std::string &execute)
         close(in);
         close(out);
         client->getRequest().setCGIEnvironment(client);
+        std::string script = getFileName(client->systemPath);
+        std::string dir = client->systemPath.substr(script.size());
+        chdir(dir.c_str());
         execlp(execute.c_str(), execute.c_str(), client->systemPath.c_str(), NULL);
         /* ubuntu_cgi_tester */
         // execlp(execute.c_str(), execute.c_str(), NULL);

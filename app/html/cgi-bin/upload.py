@@ -3,7 +3,7 @@ import os
 import sys
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-from cgi import FieldStorage
+import cgi
 
 
 method = os.environ.get("REQUEST_METHOD", "")
@@ -45,7 +45,7 @@ if not content_type or "boundary=" not in content_type:
     print("<h1>400 Bad Request: missing boundary</h1>")
     sys.exit(0)
 
-form = FieldStorage()
+form = cgi.FieldStorage()
 fileitem = form['file']
 
 if fileitem.filename:
