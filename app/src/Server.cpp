@@ -79,13 +79,13 @@ void Server::handleClientWrite(Client *client)
             res._indexByteSend += byteSend;
         }
     }
-    if (byteSend <= 0) {
+    if (byteSend <= 0 && res._indexByteSend >= res._outputLength) {
 		client->state = COMPLETED;
 	}
     if (res._indexByteSend >= res._outputLength) {
-        shutdown(client->client_fd, SHUT_WR);
-        switchEvents(client->client_fd, "POLLINN");
+        switchEvents(client->client_fd, "POLLIN");
         close(client->write_fd);
+        client->write_fd = -1;
         client->state = COMPLETED;
         return;
     }
@@ -150,9 +150,13 @@ int Server::createSocket(int port)
         std::cerr << "Error: Socket on port: " << port << std::endl;
         return 0;
     }
-    fcntl(server_fd, F_SETFL, O_NONBLOCK);
+    if (fcntl(server_fd, F_SETFL, O_NONBLOCK) < 0) {
+        perror("fcntl O_NONBLOCK failed");
+        close(server_fd);
+        return 0;
+    }
 	int opt = 1;
-	if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+	if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
 		perror("setsockopt SO_REUSEADDR failed");
 		exit(EXIT_FAILURE);
 	}
@@ -165,7 +169,7 @@ int Server::createSocket(int port)
         close(server_fd);
         return 0;
     }
-    if (listen(server_fd, 100) < 0) {
+    if (listen(server_fd, 400) < 0) {
         std::cerr << "Error: Fail to listen port: " << port << std::endl;
         close(server_fd);
         return 0;
@@ -266,22 +270,32 @@ void Server::acceptNewConnection(int server_fd)
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
     int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
-    if (client_fd < 0) {
+    if (client_fd <= 0) {
+        perror("accept failed");
         return;
 	}
-    fcntl(client_fd, F_SETFL, O_NONBLOCK);
+    if (fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0) {
+        perror("fcntl O_NONBLOCK failed");
+        close(client_fd);
+        return;
+    }
     struct pollfd pfd;
     pfd.fd = client_fd;
     pfd.events = POLLIN;
     pfd.revents = 0;
     // std::cout << std::endl << "Connected:" << inet_ntoa(client_addr.sin_addr) << std::endl;
+    if (_clients.count(client_fd)) {
+        std::cerr << "duplicate client_fd detected" << std::endl;
+        close(client_fd);
+        return;
+    }
     this->_clients[client_fd] = new Client(client_fd, server_fd);
     this->_fds.push_back(pfd);
 }
 
 void Server::run() {
     while (g_server->running) {
-        int ret = poll(&_fds[0], _fds.size(), 1000);
+        int ret = poll(&_fds[0], _fds.size(), 100);
         this->checkChildProcesses();
         if (ret <= 0) {
             continue;
@@ -629,6 +643,8 @@ void Server::checkChildProcesses()
         pid_t pid = waitpid(it->first, &status, WNOHANG);
         time_t elapsed = std::time(NULL) - startTime;
         if (elapsed > t->cgi_timeout) {
+            kill(it->first, SIGKILL);
+            waitpid(it->first, &status, 0);
 			this->errorResponse(t, 500);
 			_childProcesses.erase(it++);
 			return;
@@ -663,6 +679,7 @@ void Server::checkChildProcesses()
 bool Server::disconnect(Client &client)
 {
     if (client.state == COMPLETED) {
+        shutdown(client.client_fd, SHUT_WR);
         close(client.client_fd);
         this->removeClientByFd(client.client_fd);
         return true;
@@ -771,7 +788,6 @@ void Server::setResponse(Client *client)
     response.build();
     client->state = PROCESS_RESPONSE;
     this->switchEvents(client->client_fd, "POLLOUT");
-    this->handleClientWrite(client);
 }
 
 bool Server::isCGI(Client *client)

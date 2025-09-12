@@ -102,7 +102,10 @@ void Client::receive()
    if (hasSpace == 0) {
         return;
     }
-    ssize_t bytesReader = recv(client_fd, buffer.data() + _request.byteEnd, hasSpace, 0);
+    ssize_t bytesReader = 0;
+    if (client_fd > 0) {
+        bytesReader = recv(client_fd, buffer.data() + _request.byteEnd, hasSpace, 0);
+    }
     if (bytesReader == 0) {
         this->state = DISCONNECT;
         return ;
