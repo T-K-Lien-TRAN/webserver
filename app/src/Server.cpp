@@ -199,6 +199,7 @@ bool Server::removeClientByFd(const int client_fd)
 {
     clientList it = this->_clients.find(client_fd);
     if (it == this->_clients.end()) {
+        std::cerr << "fd not found" << std::endl;
         return false;
     }
     Client *client = it->second;
@@ -211,7 +212,6 @@ bool Server::removeClientByFd(const int client_fd)
 	}
     this->_clients.erase(it);
     delete client;
-	client = NULL;
     return true;
 }
 
@@ -299,7 +299,16 @@ void Server::acceptNewConnection(int server_fd)
     this->_fds.push_back(pfd);
 }
 
+void Server::printActiveFds(const std::string& label) {
+    std::cout << "=== " << label << " ===" << std::endl;
+    for (size_t i = 0; i < _fds.size(); ++i) {
+        std::cout << "FD[" << i << "] = " << _fds[i].fd << std::endl;
+    }
+}
+
 void Server::run() {
+    
+    std::set<int> fdsToRemove;
     while (g_server->running) {
         int ret = poll(&_fds[0], _fds.size(), 100);
         this->checkChildProcesses();
@@ -318,15 +327,14 @@ void Server::run() {
             if (_fds[i].revents & POLLOUT) handleClientWrite(client);
             if (_fds[i].revents & POLLIN) handleHeaderBody(client);
             handleRequest(client);
-        }
-        for (fdsIt it = _fds.begin(); it != _fds.end(); ) {
-            Client *client = this->findByClientFd(it->fd);
-            if (client && disconnect(*client)) {
-                it = _fds.erase(it);
-                continue;
+            if (client->state == COMPLETED) {
+                fdsToRemove.insert(client->client_fd);
             }
-            ++it;
         }
+        for (setIntIt it = fdsToRemove.begin(); it != fdsToRemove.end(); ++it) {
+            disconnect(*it);
+        }
+        fdsToRemove.clear();
     }
 }
 
@@ -682,15 +690,21 @@ void Server::checkChildProcesses()
     }
 }
 
-bool Server::disconnect(Client &client)
-{
-    if (client.state == COMPLETED) {
-        shutdown(client.client_fd, SHUT_WR);
-        close(client.client_fd);
-        this->removeClientByFd(client.client_fd);
-        return true;
+void Server::removeFd(int fd) {
+    for (fdsIt it = _fds.begin(); it != _fds.end(); ++it) {
+        if (it->fd == fd) {
+            _fds.erase(it);
+            break;
+        }
     }
-    return false;
+}
+
+void Server::disconnect(int fd)
+{
+    shutdown(fd, SHUT_WR);
+    close(fd);
+    removeFd(fd);
+    this->removeClientByFd(fd);
 }
 
 void Server::errorResponse(Client *client, int code)

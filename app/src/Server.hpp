@@ -27,7 +27,7 @@ typedef std::vector<struct pollfd>::iterator fdsIt;
 typedef std::map<int, int>::iterator WriteIt;
 typedef std::map<pid_t, std::pair<int, time_t> >::iterator ChildIt;
 typedef std::map<int, Client *>::iterator clientList;
-typedef std::set<int>::iterator socketIt;
+typedef std::set<int>::iterator setIntIt;
 
 class Server
 {
@@ -58,16 +58,18 @@ class Server
 
 	int createSocket(int);
 	void acceptNewConnection(int);
-	void handleHeaderBody(Client *);
-	void fileToOutput(Client *client, int code, std::string path);
+    void printActiveFds(const std::string &label);
+    void handleHeaderBody(Client *);
+    void fileToOutput(Client *client, int code, std::string path);
 	void handleRequest(Client *);
 	bool isAllowedMethod(std::vector<std::string>, std::string);
 	void runCGI(Client *client, const std::string &interpreter);
 	bool isDirectory(const std::string &path);
 	bool isFile(const std::string &path);
 	void checkChildProcesses();
-	bool disconnect(Client &client);
-	void errorResponse(Client *, int);
+    void removeFd(int fd);
+    void disconnect(int fd);
+    void errorResponse(Client *, int);
 	enum ClientState setState(Client *client);
 	std::string getFileName(const std::string &uri);
 	std::string getFileExtension(const std::string &uri);
