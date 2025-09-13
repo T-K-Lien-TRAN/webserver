@@ -1,5 +1,7 @@
 services:
-  siege:
-    image: openeuler/siege
-    network_mode: host
-    command: ["siege", "-c10", "-t30s", "http://localhost:8080/siege/index.html"]
+  webserver:
+    image: webserv-test
+    volumes:
+    - ./app:/app
+    working_dir: /app
+    command: ["/bin/sh", "-c", "chmod +x webserv && ./webserv config_files/evaluation.conf"]

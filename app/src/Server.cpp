@@ -143,9 +143,8 @@ bool Server::setup(Config &config)
 
 int Server::createSocket(int port)
 {
-    sockaddr_in addr;
 
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    int server_fd = socket(AF_INET6, SOCK_STREAM, 0);
     if (server_fd < 0) {
         std::cerr << "Error: Socket on port: " << port << std::endl;
         return 0;
@@ -160,11 +159,18 @@ int Server::createSocket(int port)
 		perror("setsockopt SO_REUSEADDR failed");
 		exit(EXIT_FAILURE);
 	}
-    std::memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(port);
-    if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    int off = 0;
+    if (setsockopt(server_fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof(off)) < 0) {
+        perror("setsockopt IPV6_V6ONLY failed");
+        close(server_fd);
+        return 0;
+    }
+    sockaddr_in6 addr6;
+    std::memset(&addr6, 0, sizeof(addr6));
+    addr6.sin6_family = AF_INET6;
+    addr6.sin6_addr = in6addr_any;
+    addr6.sin6_port = htons(port);
+    if (bind(server_fd, (struct sockaddr *)&addr6, sizeof(addr6)) < 0) {
         std::cerr << "Error: Fail to bind port: " << port << std::endl;
         close(server_fd);
         return 0;
@@ -267,10 +273,10 @@ bool Server::isAllowedMethod(std::vector<std::string> allowed_methods, std::stri
 
 void Server::acceptNewConnection(int server_fd)
 {
-    struct sockaddr_in client_addr;
+    struct sockaddr_storage client_addr;
     socklen_t client_len = sizeof(client_addr);
     int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
-    if (client_fd <= 0) {
+    if (client_fd < 0) {
         perror("accept failed");
         return;
 	}

@@ -38,6 +38,8 @@ curl -v "http://localhost:8080/cgi-bin/hello.py?name=bde-albu"
 #BAD_CGI
 curl -v http://localhost:8080/cgi-bin/infinite_loop.py
 
+siege -d1 -c10 -t20s http://localhost:8080/siege/index.html
+
 
 
 
