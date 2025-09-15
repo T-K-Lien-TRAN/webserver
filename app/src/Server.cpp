@@ -203,13 +203,6 @@ bool Server::removeClientByFd(const int client_fd)
         return false;
     }
     Client *client = it->second;
-    ::remove(client->inputPath.c_str());
-	std::ostringstream oss;
-    oss << "tmp/output_" << client->getId();
-	std::string tmpFile = oss.str();
-	if (client->outputPath == tmpFile) {
-		::remove(client->outputPath.c_str());
-	}
     this->_clients.erase(it);
     delete client;
     return true;
@@ -271,6 +264,15 @@ bool Server::isAllowedMethod(std::vector<std::string> allowed_methods, std::stri
     return true;
 }
 
+void Server::cleanUp(int client_fd) {
+    if (_clients.count(client_fd)) {
+        std::cerr << "Sanitizing: " << *_clients[client_fd] << std::endl;
+        delete _clients[client_fd];
+        _clients.erase(client_fd);
+        removeFd(client_fd);
+    }
+}
+
 void Server::acceptNewConnection(int server_fd)
 {
     struct sockaddr_storage client_addr;
@@ -289,21 +291,9 @@ void Server::acceptNewConnection(int server_fd)
     pfd.fd = client_fd;
     pfd.events = POLLIN;
     pfd.revents = 0;
-    // std::cout << std::endl << "Connected:" << inet_ntoa(client_addr.sin_addr) << std::endl;
-    if (_clients.count(client_fd)) {
-        std::cerr << "duplicate client_fd detected" << std::endl;
-        close(client_fd);
-        return;
-    }
+    cleanUp(client_fd);
     this->_clients[client_fd] = new Client(client_fd, server_fd);
     this->_fds.push_back(pfd);
-}
-
-void Server::printActiveFds(const std::string& label) {
-    std::cout << "=== " << label << " ===" << std::endl;
-    for (size_t i = 0; i < _fds.size(); ++i) {
-        std::cout << "FD[" << i << "] = " << _fds[i].fd << std::endl;
-    }
 }
 
 void Server::run() {
@@ -711,7 +701,7 @@ void Server::errorResponse(Client *client, int code)
 {
     Response &res = client->getResponse();
 	if (client->location == NULL) {
-		errorResponse(client, 500);
+		errorResponse(client, code);
 		return setResponse(client);
 	}
 

@@ -58,6 +58,13 @@ Client::Client(int client_fd, int server_fd) :
 
 Client::~Client() {
     std::cout << "[Client#" << _id << "] disconnect" << std::endl;
+    ::remove(this->inputPath.c_str());
+	std::ostringstream oss;
+    oss << "tmp/output_" << this->getId();
+	std::string tmpFile = oss.str();
+	if (this->outputPath == tmpFile) {
+		::remove(this->outputPath.c_str());
+	}
 }
 
 std::vector<char> &Client::getBuffer()
@@ -123,7 +130,7 @@ int Client::getId(void) const
 
 std::ostream &operator<<(std::ostream &os, const Client &client)
 {
-    os << "[Client]"
+    os << "[Client]"  
        << " client_fd: " << client.client_fd
        << ", server_fd: " << client.server_fd
        << ", state: " << client.state;

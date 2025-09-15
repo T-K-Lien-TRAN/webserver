@@ -107,7 +107,6 @@ private:
 
     void parseRequestLine(const std::string &line);
     void parseHeaders(const std::string &headerSection);
-    int multiformModule(Client &client, size_t bodyLength, size_t maxBodySize);
 };
 
 #endif

@@ -58,13 +58,13 @@ class Server
 
 	int createSocket(int);
 	void acceptNewConnection(int);
-    void printActiveFds(const std::string &label);
     void handleHeaderBody(Client *);
     void fileToOutput(Client *client, int code, std::string path);
 	void handleRequest(Client *);
 	bool isAllowedMethod(std::vector<std::string>, std::string);
-	void runCGI(Client *client, const std::string &interpreter);
-	bool isDirectory(const std::string &path);
+    void cleanUp(int client_fd);
+    void runCGI(Client *client, const std::string &interpreter);
+    bool isDirectory(const std::string &path);
 	bool isFile(const std::string &path);
 	void checkChildProcesses();
     void removeFd(int fd);
