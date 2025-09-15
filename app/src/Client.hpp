@@ -23,11 +23,11 @@ enum ClientState
     HEADER,
     BODY,
     SET_CGI,
+    WAIT_CGI,
     PROCESS_CGI,
     GET,
     POST,
     DELETE,
-    WRITING,
     METHOD,
     SET_RESPONSE,
     PROCESS_RESPONSE,
@@ -55,7 +55,8 @@ public:
     std::string outputPath;
     std::string inputPath;
     std::string systemPath;
-    int cgi_timeout;
+    int keepAlive;
+    time_t lastConnect;
 
     Client(void);
     Client(int client_fd, int server_fd);
@@ -68,6 +69,8 @@ public:
     bool parseHeader();
     int parseBody();
 	int getId( void ) const;
+    void updateActivity( void );
+    bool isTimeout( void );
 
 private:
     Request _request;

@@ -133,6 +133,7 @@ std::string Response::getStatusMessage(int code) const {
         case 404: return "Not Found";
         case 405: return "Method Not Allowed";
         case 413: return "Payload Too Large";
+        case 408: return "Request Timeout";
         case 500: return "Internal Server Error";
         case 501: return "Not Implemented";
         case 504: return "Gateway Timeout";

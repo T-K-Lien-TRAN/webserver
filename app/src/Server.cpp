@@ -81,12 +81,14 @@ void Server::handleClientWrite(Client *client)
     }
     if (byteSend <= 0 && res._indexByteSend >= res._outputLength) {
 		client->state = COMPLETED;
+        client->updateActivity();
 	}
     if (res._indexByteSend >= res._outputLength) {
         switchEvents(client->client_fd, "POLLIN");
         close(client->write_fd);
         client->write_fd = -1;
         client->state = COMPLETED;
+        client->updateActivity();
         return;
     }
 }
@@ -266,7 +268,6 @@ bool Server::isAllowedMethod(std::vector<std::string> allowed_methods, std::stri
 
 void Server::cleanUp(int client_fd) {
     if (_clients.count(client_fd)) {
-        std::cerr << "Sanitizing: " << *_clients[client_fd] << std::endl;
         delete _clients[client_fd];
         _clients.erase(client_fd);
         removeFd(client_fd);
@@ -296,26 +297,40 @@ void Server::acceptNewConnection(int server_fd)
     this->_fds.push_back(pfd);
 }
 
+void Server::isKeeAlive( void ) {
+    for (size_t i = 0; i < _fds.size(); ++i) {
+        Client *client = this->findByClientFd(_fds[i].fd);
+        if (client == NULL) continue;
+        if (client->state != WAIT_CGI && client->state != PROCESS_RESPONSE) {
+            if (client->isTimeout()) {
+                client->state = SET_RESPONSE;
+                client->getResponse().setStatus(408);
+            }
+        }
+    }
+}
+
 void Server::run() {
     
     std::set<int> fdsToRemove;
     while (g_server->running) {
         int ret = poll(&_fds[0], _fds.size(), 100);
         this->checkChildProcesses();
-        if (ret <= 0) {
-            continue;
-        }
+        this->isKeeAlive();
         for (size_t i = 0; i < _fds.size(); ++i) {
             int fd = _fds[i].fd;
             Client *client = this->findByClientFd(_fds[i].fd);
-            if (_fds[i].revents & POLLIN) {
-                if (this->_sockets.count(fd)) {
-                    acceptNewConnection(fd);
+            if (ret > 0) {
+                if (_fds[i].revents & POLLIN) {
+                    if (this->_sockets.count(fd)) {
+                        acceptNewConnection(fd);
+                    }
                 }
+                if (client == NULL) continue;
+                if (_fds[i].revents & POLLOUT) handleClientWrite(client);
+                if (_fds[i].revents & POLLIN) handleHeaderBody(client);
             }
             if (client == NULL) continue;
-            if (_fds[i].revents & POLLOUT) handleClientWrite(client);
-            if (_fds[i].revents & POLLIN) handleHeaderBody(client);
             handleRequest(client);
             if (client->state == COMPLETED) {
                 fdsToRemove.insert(client->client_fd);
@@ -401,6 +416,7 @@ void Server::handleHeaderBody(Client *client)
                     client->state = this->setState(client);
                 }
                 if (request.hasBody) {
+                    client->updateActivity();
                     client->state = BODY;
                 }
             } else {
@@ -496,6 +512,7 @@ void Server::handleRequest(Client * client)
         if (fstat(fd, &st) == -1 || st.st_size == 0) {
             client->getResponse().sendFile = false;
             client->state = PROCESS_RESPONSE;
+            client->updateActivity();
             return this->errorResponse(client, 200);
         } else {
             char buffer[4096];
@@ -531,6 +548,7 @@ void Server::handleRequest(Client * client)
 			}
         }
         client->state = SET_RESPONSE;
+        client->updateActivity();
         response.setFileContentLength(client->outputPath, client->bodyOffSet);
     }
 
@@ -557,6 +575,7 @@ void Server::handleRequest(Client * client)
             }
 			fileToOutput(client, 200, client->systemPath);
         	client->state = SET_RESPONSE;
+            client->updateActivity();
 		} else {
 			return errorResponse(client, 404);
 		}
@@ -565,6 +584,7 @@ void Server::handleRequest(Client * client)
     if (client->state == POST) {
         response.setStatus(200);
         client->state = SET_RESPONSE;
+        client->updateActivity();
     }
 
     if (client->state == DELETE)
@@ -573,6 +593,7 @@ void Server::handleRequest(Client * client)
             response.setStatus(200);
             response.setBody("<h1>File deleted</h1>");
             client->state = SET_RESPONSE;
+            client->updateActivity();
         } else {
             return errorResponse(client, 500);
         }
@@ -580,6 +601,7 @@ void Server::handleRequest(Client * client)
 
     if (client->state == SET_RESPONSE) {
         this->setResponse(client);
+        handleClientWrite(client);
     }
 }
 
@@ -619,7 +641,8 @@ void Server::runCGI(Client *client, const std::string &execute)
     }
     time_t now = std::time(NULL);
     _childProcesses[pid] = std::make_pair(client->client_fd, now);
-    client->state = WRITING;
+    client->state = WAIT_CGI;
+    client->updateActivity();
 }
 
 bool Server::isDirectory(const std::string &path)
@@ -641,15 +664,13 @@ bool Server::isFile(const std::string &path)
 void Server::checkChildProcesses()
 {
     for (ChildIt it = _childProcesses.begin(); it != _childProcesses.end();) {
-        Client *t = this->_clients[it->second.first];
-        time_t startTime = it->second.second;
+        Client *client = this->_clients[it->second.first];
         int status;
         pid_t pid = waitpid(it->first, &status, WNOHANG);
-        time_t elapsed = std::time(NULL) - startTime;
-        if (elapsed > t->cgi_timeout) {
+        if (client->isTimeout()) {
             kill(it->first, SIGKILL);
             waitpid(it->first, &status, 0);
-			this->errorResponse(t, 500);
+			this->errorResponse(client, 500);
 			_childProcesses.erase(it++);
 			return;
         }
@@ -657,18 +678,19 @@ void Server::checkChildProcesses()
             if (WIFEXITED(status)) {
                 int exitStatus = WEXITSTATUS(status);
                 if (exitStatus != 0) {
-                    this->errorResponse(t, 500);
+                    this->errorResponse(client, 500);
                     _childProcesses.erase(it++);
                     return;
                 }
             } else if (WIFSIGNALED(status)) {
-                this->errorResponse(t, 500);
+                this->errorResponse(client, 500);
                 _childProcesses.erase(it++);
                 return;
             }
-            t->getResponse().sendFile = true;
-            t->state = PROCESS_CGI;
-            handleRequest(t);
+            client->getResponse().sendFile = true;
+            client->state = PROCESS_CGI;
+            client->updateActivity();
+            handleRequest(client);
             _childProcesses.erase(it++);
             return;
         } else if (pid == -1) {
@@ -730,6 +752,7 @@ void Server::errorResponse(Client *client, int code)
 enum ClientState Server::setState(Client *client)
 {
     Request &request = client->getRequest();
+    client->updateActivity();
     if (isCGI(client)) {
         return SET_CGI;
     } else if (request.getMethod() == "GET") {
@@ -797,6 +820,7 @@ void Server::setResponse(Client *client)
 
     response.build();
     client->state = PROCESS_RESPONSE;
+    client->updateActivity();
     this->switchEvents(client->client_fd, "POLLOUT");
 }
 

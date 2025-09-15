@@ -39,7 +39,8 @@ Client::Client(int client_fd, int server_fd) :
     bodyOffSet(0),
     location(NULL),
     state(HEADER),
-    cgi_timeout(90)
+    keepAlive(90),
+    lastConnect(time(NULL))
 {
     this->_request = Request();
     this->_response = Response();
@@ -126,6 +127,18 @@ void Client::receive()
 int Client::getId(void) const
 {
     return this->_id;
+}
+
+void Client::updateActivity(void)
+{
+    lastConnect = time(NULL);
+}
+
+bool Client::isTimeout(void)
+{
+    time_t elapsed = time(NULL) - lastConnect;
+    if (elapsed > keepAlive) { return true; }
+    return false;
 }
 
 std::ostream &operator<<(std::ostream &os, const Client &client)

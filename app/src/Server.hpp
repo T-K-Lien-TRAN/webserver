@@ -58,6 +58,7 @@ class Server
 
 	int createSocket(int);
 	void acceptNewConnection(int);
+    void isKeeAlive(void);
     void handleHeaderBody(Client *);
     void fileToOutput(Client *client, int code, std::string path);
 	void handleRequest(Client *);
